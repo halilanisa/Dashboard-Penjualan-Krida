@@ -1,0 +1,5 @@
+# Jangan push secret
+service_account.json
+
+# Folder backend (sub-repo)
+backend/
