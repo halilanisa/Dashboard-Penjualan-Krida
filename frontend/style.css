@@ -268,6 +268,16 @@ body {
     line-height: 1;
 }
 
+/* Hover Card */
+.summary-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.summary-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 16px 28px rgba(0,0,0,0.15);
+}
+
 /* =====================
    TEXT STYLE (RAPI & SERAGAM)
 ===================== */
@@ -303,7 +313,7 @@ body {
     position: absolute;
     left: 0;
     top: 0;
-    width: 6px;
+    width: 10px;
     height: 100%;
     border-radius: 12px 0 0 12px;
 }
@@ -320,10 +330,21 @@ body {
 }
 
 
-.summary-card:nth-child(1)::before { background: var(--blue); }
-.summary-card:nth-child(2)::before { background: var(--teal); }
-.summary-card:nth-child(3)::before { background: var(--orange); }
-.summary-card:nth-child(4)::before { background: var(--red); }
+.summary-card:nth-child(1)::before {
+    background: linear-gradient(180deg, #DB0000, #FF5959);
+}
+
+.summary-card:nth-child(2)::before {
+    background: linear-gradient(180deg, #DB0000, #FF5959);
+}
+
+.summary-card:nth-child(3)::before {
+    background: linear-gradient(180deg, #DB0000, #FF5959);
+}
+
+.summary-card:nth-child(4)::before {
+    background: linear-gradient(180deg, #DB0000, #FF5959);
+}
 
 
 /* =====================

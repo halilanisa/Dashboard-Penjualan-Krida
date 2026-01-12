@@ -13,6 +13,7 @@ let chartTrendPekerjaan = null;
 let chartPiePelanggan = null;
 let chartBarPelanggan = null;
 let chartTrendPelanggan = null;
+let chartPenjualanWiraniaga = null;
 
 const navItems = document.querySelectorAll(".nav-item");
 const pageTitle = document.getElementById("page-title");
@@ -42,11 +43,12 @@ function loadPage(page) {
   const pageNames = {
     home: "Beranda",
     overview: "Ringkasan",
+    "performa-sales": "Performa Sales",
     trend: "Tren",
     penjualan: "Penjualan",
     produk: "Produk",
     pekerja: "Pekerja",
-    pelanggan: "Pelanggan",
+    pelanggan: "Customer RO",
     wilayah: "Wilayah",
     unduhdata: "Unduh Data",
   };
@@ -63,6 +65,7 @@ function loadPage(page) {
   switch (page) {
     case "home": loadHome(); break;
     case "overview": loadOverview(); break;
+    case "performa-sales": loadPerformaSales(); break;
     case "trend": loadTrend(); break;
     case "penjualan": loadPenjualan(); break;
     case "produk": loadProduk(); break;
@@ -138,6 +141,7 @@ function updatePage(page) {
         switch (active) {
           case "overview": loadOverview(); break;
           case "trend": loadTrend(); break;
+          case "performa-sales": loadPerformaSales(); break;
           case "penjualan": loadPenjualan(); break;
           case "produk": loadProduk(); break;
           case "pekerja": loadPekerja(); break;
@@ -206,7 +210,6 @@ function loadHome() {
 }
 
 async function loadOverview() {
-  // 1. Setup the basic layout grid
   content.innerHTML = `
         <div class="overview-page">
             <div class="summary-grid">
@@ -232,17 +235,40 @@ async function loadOverview() {
             </div>
 
             <div class="card chart-card">
-                <h3>Tren Penjualan Bulanan</h3>
+                <h3>Tren Penjualan</h3>
                 <canvas id="trendChart"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>Penjualan per Wiraniaga</h3>
+                <div class="dropdown-top-wiraniaga">
+                    <select id="selectTopWiraniaga">
+                        <option value="5" selected>Top 5</option>
+                        <option value="10">Top 10</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+                <canvas id="chartPenjualanWiraniaga"></canvas>
             </div>
 
             <div class="grid-2">
                 <div class="card"><h3>Distribusi Metode Penjualan</h3><canvas id="piePenjualan"></canvas></div>
-                <div class="card"><h3>Status Sales</h3><canvas id="statusSales"></canvas></div>
+                <div class="card"><h3>Penjualan Per Status Sales</h3><canvas id="statusSales"></canvas></div>
             </div>
 
             <div class="card">
                 <h3>Lead Prospek Sistem</h3>
+                <div class="sales-date-filter">
+                    <input type="date" id="salesStartDate">
+                    <input type="date" id="salesEndDate">
+                </div>
+                <div class="dropdown-top-sales">
+                            <select id="selectTopSales">
+                        <option value="5" selected>Top 5</option>
+                        <option value="10">Top 10</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
                 <canvas id="chartTransaksiSales"></canvas>
             </div>
 
@@ -252,159 +278,364 @@ async function loadOverview() {
             </div>
         </div>
     `;
-
-  // 2. Fetch Data
+    setTimeout(() => {
+      document.getElementById("salesStartDate")?.addEventListener("change", reloadTransaksiSales);
+      document.getElementById("salesEndDate")?.addEventListener("change", reloadTransaksiSales);
+    }, 0);
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
   const res = await fetch(`http://localhost:8000/overview?${query}`);
   const data = await res.json();
   const p = data.penjualan;
 
-  // --- CARD 1: TOTAL ---
   document.getElementById("summary-total").innerHTML = `
         <div class="total-big-number">${p.total_all.toLocaleString()}</div>
-    `;
+        <div class="item border-top"><strong>Outlook Bulan Depan:</strong> <span>${p.prediksi_bulan_depan.toLocaleString()}</span></div>
+  `;
 
-  // --- CARD 2: BULANAN ---
   const deltaClass = p.selisih > 0 ? 'up' : p.selisih < 0 ? 'down' : 'neutral';
   const deltaIcon = p.selisih > 0 ? '▲' : p.selisih < 0 ? '▼' : '•';
 
-  document.getElementById("summary-bulanan").innerHTML = `
-        <div class="summary-list">
-            <div class="item"><strong>Bulan ini:</strong> <span>${p.total_ini}</span></div>
-            <div class="item"><strong>Bulan lalu:</strong> <span>${p.total_lalu}</span></div>
-            <div class="delta-badge ${deltaClass}">
-                ${deltaIcon} ${Math.abs(p.selisih)} Penjualan
-            </div>
-            <div class="item border-top"><strong>Prediksi Bulan Ini:</strong> <span>${p.prediksi}</span></div>
-        </div>
-    `;
+  const prediksiBulanIni = p.prediksi_bulan_ini ?? 0;
 
-  // --- CARD 3: KENDARAAN ---
+  document.getElementById("summary-bulanan").innerHTML = `
+      <div class="summary-list">
+          <div class="item"><strong>M:</strong> <span>${p.total_ini}</span></div>
+          <div class="item"><strong>-M:</strong> <span>${p.total_lalu}</span></div>
+          <div class="delta-badge ${deltaClass}">
+              ${deltaIcon} ${Math.abs(p.selisih)} Penjualan
+          </div>
+          <div class="item border-top"><strong>Outlook Bulan Ini:</strong> <span>${prediksiBulanIni.toLocaleString()}</span></div>
+      </div>
+  `;
+
   document.getElementById("summary-kendaraan").innerHTML = `
         <div class="summary-list">
             <div class="item-stack">
-                <strong class="label-mini">Bulan Ini:</strong>
+                <strong class="label-mini">M:</strong>
                 <span class="value-main">${data.top_kendaraan.bulan_ini.label} <span>(${data.top_kendaraan.bulan_ini.jumlah})</span></span>
             </div>
             <div class="item-stack">
-                <strong class="label-mini">Bulan Lalu:</strong>
+                <strong class="label-mini">-M:</strong>
                 <span class="value-sub">${data.top_kendaraan.bulan_lalu.label} (${data.top_kendaraan.bulan_lalu.jumlah})</span>
             </div>
         </div>
     `;
 
-  // --- CARD 4: KECAMATAN ---
   document.getElementById("summary-kecamatan").innerHTML = `
         <div class="summary-list">
             <div class="item-stack">
-                <strong class="label-mini">Bulan Ini:</strong>
+                <strong class="label-mini">M:</strong>
                 <span class="value-main">${data.top_kecamatan.bulan_ini.label} <span>(${data.top_kecamatan.bulan_ini.jumlah})</span></span>
             </div>
             <div class="item-stack">
-                <strong class="label-mini">Bulan Lalu:</strong>
+                <strong class="label-mini">-M:</strong>
                 <span class="value-sub">${data.top_kecamatan.bulan_lalu.label} (${data.top_kecamatan.bulan_lalu.jumlah})</span>
             </div>
         </div>
     `;
 
-  // 3. Initialize Charts
   renderCharts(data);
 }
 
-// Helper function to keep loadOverview clean
+
+let chartTransaksiSales = null;
+
+// TRANSAKSI SALES CHART
+function renderTransaksiSalesChart(data) {
+  const ctx = document.getElementById("chartTransaksiSales").getContext("2d");
+  const COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+
+  const labelsSource = data.transaksi_sales.labels;
+  const datasetsSource = data.transaksi_sales.datasets.map((ds, i) => ({
+    ...ds,
+    backgroundColor: COLORS[i % COLORS.length], // pakai warna palet lengkap
+    borderRadius: 10,
+    data: ds.data
+  }));
+
+  function updateChart(topN) {
+    let labels, datasets;
+
+    if (topN === "all") {
+      labels = labelsSource;
+      datasets = datasetsSource.map(ds => ({ ...ds, data: ds.data }));
+    } else {
+      const n = parseInt(topN);
+      labels = labelsSource.slice(0, n);
+      datasets = datasetsSource.map(ds => ({ ...ds, data: ds.data.slice(0, n) }));
+    }
+
+    if (chartTransaksiSales) chartTransaksiSales.destroy();
+
+    chartTransaksiSales = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x}` }
+          },
+          datalabels: {
+            color: '#333',
+            anchor: 'end',
+            align: 'end',
+            offset: 6,
+            font: { weight: 'bold', size: 12 },
+            formatter: (value, ctx) => {
+              const datasets = ctx.chart.data.datasets;
+              const lastDatasetIndex = datasets.length - 1;
+              if (ctx.datasetIndex !== lastDatasetIndex) return '';
+              let total = 0;
+              datasets.forEach(ds => { total += ds.data[ctx.dataIndex] || 0; });
+              return total.toLocaleString();
+            }
+          }
+        },
+        scales: {
+          x: { 
+            stacked: true, 
+            beginAtZero: true, 
+            grid: { display: false }, 
+            ticks: { font: { size: 11 } } 
+          },
+          y: { 
+            stacked: true, 
+            grid: { drawTicks: false, color: '#eee' }, 
+            ticks: { font: { size: 11 } } 
+          }
+        },
+        animation: { duration: 1500, easing: 'easeOutQuart' }
+      },
+      plugins: [ChartDataLabels]
+    });
+  }
+
+  updateChart(document.getElementById("selectTopSales")?.value || 5);
+  document.getElementById("selectTopSales").onchange = e => updateChart(e.target.value);
+}
+
 function renderCharts(data) {
+  const trendCtx = document.getElementById("trendChart").getContext("2d");
 
-  const COLORS = ["#326199", "#4FB1A1", "#FCC055", "#EB8D50", "#DF6E5B"];
+  const trendGradient = trendCtx.createLinearGradient(0, 0, 0, 300);
+  trendGradient.addColorStop(0, "rgba(38,113,188,0.25)");
+  trendGradient.addColorStop(1, "rgba(38,113,188,0)");
 
-  const labels = data.trend_bulanan.map(d => d.bulan);
-  const values = data.trend_bulanan.map(d => d.jumlah);
+  const trendLabels = data.trend_harian.map(d => d.tanggal);
+  const trendValues = data.trend_harian.map(d => d.jumlah);
 
   if (chartTrend) chartTrend.destroy();
 
-  chartTrend = new Chart(trendChart, {
+  const trendHoverLine = {
+    id: "trendHoverLine",
+    afterDraw(chart) {
+      const active = chart.tooltip?.getActiveElements();
+      if (!active || !active.length) return;
+
+      const { ctx, chartArea } = chart;
+      const x = active[0].element.x;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x, chartArea.top);
+      ctx.lineTo(x, chartArea.bottom);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "#8ECAE6";
+      ctx.stroke();
+      ctx.restore();
+    }
+  };
+
+  chartTrend = new Chart(trendCtx, {
     type: "line",
     data: {
-      labels: labels,
+      labels: trendLabels,
       datasets: [{
-        data: values,
-        borderColor: "#326199",
-        backgroundColor: "rgba(82, 174, 214, 1)", // area lembut
-        tension: 0,
-        fill: false,
-        pointRadius: 3,
-        pointHoverRadius: 6,
-        borderWidth: 3
+        data: trendValues,
+        borderColor: "#2671BC",
+        backgroundColor: trendGradient,
+        fill: true,
+        tension: 0.35,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        pointBackgroundColor: "#2671BC",
+        pointBorderColor: "#fff",
+        pointBorderWidth: 2
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: {
+        mode: "index",
+        intersect: false
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
-          mode: "index",
-          intersect: false,
+          backgroundColor: "#fff",
+          titleColor: "#111",
+          bodyColor: "#333",
+          borderColor: "#8ECAE6",
+          borderWidth: 1,
+          padding: 12,
+          cornerRadius: 10,
+          displayColors: false,
           callbacks: {
-            label: ctx => `Jumlah: ${ctx.parsed.y}`
+            label: c => `Jumlah: ${c.parsed.y}`
           }
         }
       },
       scales: {
         x: {
-          grid: { display: false }   // ⬅️ bersih
+          grid: { display: false },
+          ticks: { color: "#9ca3af" }
         },
         y: {
           beginAtZero: true,
           grid: {
-            color: "#f0f2f5"         // ⬅️ grid halus
+            color: "#f1f5f9",
+            drawBorder: false
           },
           ticks: {
+            color: "#9ca3af",
             stepSize: 10
           }
         }
       }
-    }
+    },
+    plugins: [trendHoverLine]
   });
 
+  // PENJUALAN PER WIRANIAGA DENGAN TOP 5/10/ALL
+  const wiraniagaLabelsFull = data.penjualan_wiraniaga.map(d => d.wiraniaga);
+  const wiraniagaValuesFull = data.penjualan_wiraniaga.map(d => d.jumlah);
+
+  const wiraniagaCtx = document.getElementById("chartPenjualanWiraniaga").getContext("2d");
+
+  function updateWiraniagaChart(topN) {
+      let labels, values;
+
+      if (topN === "all") {
+          labels = wiraniagaLabelsFull;
+          values = wiraniagaValuesFull;
+      } else {
+          const n = parseInt(topN);
+          labels = wiraniagaLabelsFull.slice(0, n);
+          values = wiraniagaValuesFull.slice(0, n);
+      }
+
+      if (chartPenjualanWiraniaga) chartPenjualanWiraniaga.destroy();
+
+      // Pakai 1 warna solid
+      const wiraniagaColors = values.map(() => "#C73333");
+
+      chartPenjualanWiraniaga = new Chart(wiraniagaCtx, {
+          type: "bar",
+          data: {
+              labels: labels,
+              datasets: [{
+                  label: "Jumlah Penjualan",
+                  data: values,
+                  backgroundColor: wiraniagaColors, // warna solid
+                  borderRadius: 10
+              }]
+          },
+          options: {
+              indexAxis: "y",
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                      callbacks: {
+                          label: context => `Jumlah: ${context.parsed.x}`
+                      }
+                  },
+                  datalabels: {
+                      anchor: 'end',
+                      align: 'end',
+                      offset: 6,
+                      color: '#333',
+                      font: { weight: 'bold', size: 12 },
+                      formatter: value => value.toLocaleString()
+                  }
+              },
+              scales: {
+                  x: { beginAtZero: true, grid: { display: false }, ticks: { font: { size: 11 } } },
+                  y: { grid: { drawTicks: false, color: '#eee' }, ticks: { font: { size: 11 } } }
+              },
+              animation: { duration: 1500, easing: 'easeOutQuart' }
+          },
+          plugins: [ChartDataLabels]
+      });
+  }
+
+  updateWiraniagaChart(document.getElementById("selectTopWiraniaga")?.value || 5);
+
+  document.getElementById("selectTopWiraniaga").onchange = e => {
+      updateWiraniagaChart(e.target.value);
+  };
 
   const pieLabels = data.pie_penjualan.map(d => d.penjualan);
   const pieValues = data.pie_penjualan.map(d => d.jumlah);
 
   if (chartPie) chartPie.destroy();
 
-  chartPie = new Chart(piePenjualan, {
-    type: "bar",
-    data: {
-      labels: pieLabels,
-      datasets: [{
-        data: pieValues,
-        backgroundColor: COLORS
-      }]
-    },
-    options: {
-      plugins: {
-        legend: {
-          display: false
-        },
-        tooltip: {
-          enabled: true,       // pastikan tooltip aktif
-          mode: 'index',       // tooltip per index (bar)
-          intersect: false,    // muncul walau kursor agak di samping bar
-          callbacks: {
-            label: function (context) {
-              return `Jumlah: ${context.parsed.y}`; // teks tooltip
-            }
-          }
-        }
+  const ctxPie = piePenjualan.getContext("2d");
+
+  // Pakai 2 warna solid
+  const PIE_COLORS = ["#E97700", "#FFB703"];
+  const pieColors = pieValues.map((_, i) => PIE_COLORS[i % PIE_COLORS.length]);
+
+  chartPie = new Chart(ctxPie, {
+      type: "bar",
+      data: {
+          labels: pieLabels,
+          datasets: [{
+              label: "Jumlah Penjualan",
+              data: pieValues,
+              backgroundColor: pieColors, // pakai warna solid
+              borderRadius: 10
+          }]
       },
-      hover: {
-        mode: 'index',
-        intersect: false
+      options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+              legend: { display: false },
+              tooltip: {
+                  enabled: true,
+                  mode: 'index',
+                  intersect: false,
+                  callbacks: {
+                      label: context => `Jumlah: ${context.parsed.y}`
+                  }
+              },
+              datalabels: {
+                  anchor: 'end',
+                  align: 'end',
+                  offset: 6,
+                  color: '#333',
+                  font: { weight: 'bold', size: 12 },
+                  formatter: value => value.toLocaleString()
+              }
+          },
+          scales: {
+              x: { ticks: { font: { size: 11 } } },
+              y: { beginAtZero: true, grid: { display: false }, ticks: { font: { size: 11 } } }
+          },
+          animation: { duration: 1500, easing: 'easeOutQuart' }
       },
-      responsive: true,
-      maintainAspectRatio: false
-    }
+      plugins: [ChartDataLabels]
   });
 
   const statusLabels = data.status_sales.map(d => d.salesman_status);
@@ -412,198 +643,272 @@ function renderCharts(data) {
 
   if (chartStatus) chartStatus.destroy();
 
-  chartStatus = new Chart(statusSales, {
-    type: "bar",
-    data: {
-      labels: statusLabels,
-      datasets: [{
-        data: statusValues,
-        backgroundColor: COLORS
-      }]
-    },
-    options: {
-      plugins: {
-        legend: {
-          display: false
-        },
-        tooltip: {
-          enabled: true,       // pastikan tooltip aktif
-          mode: 'index',       // tooltip per index (bar)
-          intersect: false,    // muncul walau kursor agak di samping bar
-          callbacks: {
-            label: function (context) {
-              return `Jumlah: ${context.parsed.y}`; // teks tooltip
-            }
-          }
-        }
+  const ctxStatus = statusSales.getContext("2d");
+
+  // Pakai 3 warna solid
+  const STATUS_COLORS = ["#E97700", "#FFB703", "#8ECAE6"];
+  const statusColors = statusValues.map((_, i) => STATUS_COLORS[i % STATUS_COLORS.length]);
+
+  chartStatus = new Chart(ctxStatus, {
+      type: "bar",
+      data: {
+          labels: statusLabels,
+          datasets: [{
+              label: "Jumlah Status",
+              data: statusValues,
+              backgroundColor: statusColors, // pakai warna solid
+              borderRadius: 10
+          }]
       },
-      hover: {
-        mode: 'index',
-        intersect: false
+      options: {
+          indexAxis: "x",
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+              legend: { display: false },
+              tooltip: {
+                  enabled: true,
+                  mode: 'index',
+                  intersect: false,
+                  callbacks: {
+                      label: context => `Jumlah: ${context.parsed.y}`
+                  }
+              },
+              datalabels: {
+                  anchor: 'end',
+                  align: 'end',
+                  offset: 6,
+                  color: '#333',
+                  font: { weight: 'bold', size: 12 },
+                  formatter: value => value.toLocaleString()
+              }
+          },
+          scales: {
+              x: { ticks: { font: { size: 11 } } },
+              y: { beginAtZero: true, grid: { display: false }, ticks: { font: { size: 11 } } }
+          },
+          animation: { duration: 1500, easing: 'easeOutQuart' }
       },
-      responsive: true,
-      maintainAspectRatio: false
-    }
-  });
-    
-  // --- LEAD PROSPEK SISTEM: DISTRIBUSI PER STATUS 
-  let chartTransaksiSales = null;
-
-  // Filter data yang bukan Deal
-  const transaksiSalesFiltered = data.transaksi_sales.filter(d => d.status !== "Deal");
-
-  // Hitung total per status
-  const leadPerStatus = transaksiSalesFiltered.reduce((acc, cur) => {
-    if (!acc[cur.status]) acc[cur.status] = 0;
-    acc[cur.status] += cur.jumlah;
-    return acc;
-  }, {});
-
-  const leadStatusSorted = Object.entries(leadPerStatus)
-                                .map(([status, jumlah]) => ({ status, jumlah }))
-                                .sort((a, b) => b.jumlah - a.jumlah);
-
-  const leadLabels = leadStatusSorted.map(d => d.status);
-  const leadValues = leadStatusSorted.map(d => d.jumlah);
-
-  const STATUS_COLORS_14 = ["#DF6E5B", "#EB8D50", "#FCC055", "#326199", "#4FB1A1"];
-
-  if (chartTransaksiSales) chartTransaksiSales.destroy();
-
-  chartTransaksiSales = new Chart(document.getElementById("chartTransaksiSales"), {
-    type: "bar",
-    data: {
-      labels: leadLabels,
-      datasets: [{
-        label: "Jumlah Prospek",
-        data: leadValues,
-        backgroundColor: STATUS_COLORS_14.slice(0, leadLabels.length),
-        borderRadius: 0,   
-        barPercentage: 0.6
-      }]
-    },
-    options: {
-      indexAxis: "y", 
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          mode: "index",
-          intersect: false,
-          callbacks: {
-            label: ctx => `${ctx.parsed.x}`
-          }
-        }
-      },
-      scales: {
-        x: {
-          beginAtZero: true,
-          grid: { color: "#f0f2f5" },
-          ticks: { font: { size: 11 } }
-        },
-        y: {
-          grid: { color: "#f0f2f5" },
-          ticks: { font: { size: 11 } }
-        }
-      }
-    }
+      plugins: [ChartDataLabels]
   });
 
+  // ===== Top Kecamatan =====
   const kecLabels = data.top10_kecamatan.map(d => d.kecamatan);
   const kecValues = data.top10_kecamatan.map(d => d.jumlah);
 
   if (chartTopKecamatan) chartTopKecamatan.destroy();
 
-  chartTopKecamatan = new Chart(document.getElementById("topKecamatan"), {
-    type: "bar",
-    data: {
-      labels: kecLabels,
-      datasets: [{
-        data: kecValues,
-        backgroundColor: "#326199"
-      }]
-    },
-    options: {
-      indexAxis: "y",
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          enabled: true,
-          mode: 'index',
-          intersect: false,
-          callbacks: {
-            label: function (context) {
-              return `Jumlah: ${context.parsed.x}`;
-            }
-          }
-        }
+  const ctx = document.getElementById("topKecamatan").getContext("2d");
+
+  // Semua bar pakai warna solid #FFB703
+  const kecColors = kecValues.map(() => "#FFB703");
+
+  chartTopKecamatan = new Chart(ctx, {
+      type: "bar",
+      data: {
+          labels: kecLabels,
+          datasets: [{
+              data: kecValues,
+              backgroundColor: kecColors, // warna solid
+              borderRadius: 10
+          }]
       },
-      scales: {
-        x: { ticks: { font: { size: 11 } } },
-        y: { ticks: { font: { size: 11 } } }
+      options: {
+          indexAxis: "y",
+          plugins: {
+              legend: { display: false },
+              tooltip: { enabled: true, mode: 'index', intersect: false },
+              datalabels: {
+                  anchor: 'end',
+                  align: 'end',
+                  offset: 6,
+                  color: '#333',
+                  font: { weight: 'bold', size: 12 },
+                  formatter: value => value.toLocaleString()
+              }
+          },
+          scales: {
+              x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+              y: { grid: { drawTicks: false, color: '#eee' }, ticks: { font: { size: 11 } } }
+          },
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 1500, easing: 'easeOutQuart' }
       },
-      responsive: true,
-      maintainAspectRatio: false
-    }
+      plugins: [ChartDataLabels]
   });
 
+  // ===== Top Kendaraan =====
   const kenLabels = data.top10_kendaraan.map(d => d.type_kendaraan);
   const kenValues = data.top10_kendaraan.map(d => d.jumlah);
 
   if (chartTopKendaraan) chartTopKendaraan.destroy();
 
-  chartTopKendaraan = new Chart(document.getElementById("topKendaraan"), {
-    type: "bar",
-    data: {
-      labels: kenLabels,
-      datasets: [{
-        data: kenValues,
-        backgroundColor: "#EB8D50"
-      }]
-    },
-    options: {
-      indexAxis: "y",
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          enabled: true,
-          mode: 'index',
-          intersect: false,
-          callbacks: {
-            label: function (context) {
-              return `Jumlah: ${context.parsed.x}`;
-            }
-          }
-        }
+  const ctxKendaraan = document.getElementById("topKendaraan").getContext("2d");
+
+  // Semua bar pakai warna solid #8ECAE6
+  const kenColors = kenValues.map(() => "#8ECAE6");
+
+  chartTopKendaraan = new Chart(ctxKendaraan, {
+      type: "bar",
+      data: { 
+          labels: kenLabels, 
+          datasets: [{ 
+              data: kenValues, 
+              backgroundColor: kenColors, // warna solid
+              borderRadius: 10 
+          }] 
       },
-      scales: {
-        x: { ticks: { font: { size: 11 } } },
-        y: { ticks: { font: { size: 11 } } }
+      options: {
+          indexAxis: "y",
+          plugins: {
+              legend: { display: false },
+              tooltip: {
+                  enabled: true,
+                  mode: 'index',
+                  intersect: false,
+                  callbacks: { label: context => `Jumlah: ${context.parsed.x}` }
+              },
+              datalabels: {
+                  anchor: 'end',
+                  align: 'end',
+                  offset: 6,
+                  color: '#333',
+                  font: { weight: 'bold', size: 12 },
+                  formatter: value => value.toLocaleString()
+              }
+          },
+          scales: {
+              x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+              y: { grid: { drawTicks: false, color: '#eee' }, ticks: { font: { size: 11 } } }
+          },
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 1500, easing: 'easeOutQuart' }
       },
-      responsive: true,
-      maintainAspectRatio: false
-    }
+      plugins: [ChartDataLabels]
   });
 
+  renderTransaksiSalesChart(data);
+  }
+// RELOAD TRANSAKSI SALES
+async function reloadTransaksiSales() {
+  const filters = getGlobalFilters();
+
+  const salesStart = document.getElementById("salesStartDate")?.value;
+  const salesEnd = document.getElementById("salesEndDate")?.value;
+
+  if (salesStart) filters.sales_start_date = salesStart;
+  if (salesEnd) filters.sales_end_date = salesEnd;
+
+  const query = buildQuery(filters);
+  const res = await fetch(`http://localhost:8000/overview?${query}`);
+  const data = await res.json();
+
+  renderTransaksiSalesChart(data);
+}
+
+async function loadPerformaSales() {
+  content.innerHTML = `
+    <div class="card">
+      <p style="font-size:13px;color:#666; margin-bottom:10px;">
+        Tanggal Invoice Yang Dipilih Wajib 3 Bulan!
+      </p>
+
+      <h3 style="margin-bottom:10px;">Performa Sales 3 Bulan Terakhir</h3>
+
+      <div style="overflow:auto;">
+        <table class="table" id="tablePerformaSales">
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Sales</th>
+              <th id="bulan1"></th>
+              <th id="bulan2"></th>
+              <th id="bulan3"></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  const filters = getGlobalFilters();
+  const query = buildQuery(filters);
+
+  const res = await fetch(`http://localhost:8000/performa-sales?${query}`);
+  const data = await res.json();
+
+  const [bulan1, bulan2, bulan3] = data.periode;
+
+  document.getElementById("bulan1").innerText = bulan1;
+  document.getElementById("bulan2").innerText = bulan2;
+  document.getElementById("bulan3").innerText = bulan3;
+
+  const tbody = document.querySelector("#tablePerformaSales tbody");
+
+  data.data.forEach((d, i) => {
+    const p2 = buildPerubahan(d.bulan_1, d.bulan_2);
+    const p3 = buildPerubahan(d.bulan_2, d.bulan_3);
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${d.sales}</td>
+
+        <td style="text-align:center;">
+          <div>${d.bulan_1}</div>
+        </td>
+
+        <td style="text-align:center;">
+          <div>${d.bulan_2}</div>
+          ${p2}
+        </td>
+
+        <td style="text-align:center;">
+          <div>${d.bulan_3}</div>
+          ${p3}
+        </td>
+      </tr>
+    `;
+  });
+}
+function buildPerubahan(prev, curr) {
+  const diff = curr - prev;
+
+  if (diff > 0) {
+    return `<div style="color:#2ecc71;font-size:12px;">
+      ▲ Naik ${diff}
+    </div>`;
+  }
+
+  if (diff < 0) {
+    return `<div style="color:#e74c3c;font-size:12px;">
+      ▼ Turun ${Math.abs(diff)}
+    </div>`;
+  }
+
+  return `<div style="color:#f1c40f;font-size:12px;">
+    ― Stabil
+  </div>`;
 }
 
 async function loadTrend() {
   content.innerHTML = `
     <div class="trend-page">
-
       <div class="card">
-        <h3>Trend Jumlah Penjualan</h3>
+        <h3>Tren Jumlah Penjualan</h3>
         <canvas id="trendTotal"></canvas>
       </div>
 
       <div class="card">
-        <h3>Trend Metode Penjualan</h3>
+        <h3>Tren Metode Penjualan</h3>
         <canvas id="trendMetode"></canvas>
       </div>
 
       <div class="card">
-        <h3>Trend Penjualan Berdasarkan FinCo</h3>
+        <h3>Tren Penjualan Berdasarkan FinCo</h3>
         <div style="margin-bottom:10px;">
           <label>Pilih Top FinCo:</label>
           <select id="topFincoSelect">
@@ -616,12 +921,6 @@ async function loadTrend() {
       </div>
     </div>
   `;
-
-  const COLORS = [
-    "#326199","#4fb1a1","#fcc055","#eb8d50","#df6e5b",
-    "#2d5496","#3ba298","#fcd77b","#f29e6b","#d96957","#8ab17d",
-    "#e9c46a","#f4a261"
-  ];
 
   const topSelect = document.getElementById("topFincoSelect");
 
@@ -637,110 +936,215 @@ async function loadTrend() {
     if (chartMetode) chartMetode.destroy();
     if (chartFinco) chartFinco.destroy();
 
+    // ================= TREND TOTAL =================
+    const totalCtx = document.getElementById("trendTotal").getContext("2d");
+
+    const totalGradient = totalCtx.createLinearGradient(0, 0, 0, 300);
+    totalGradient.addColorStop(0, "rgba(38,113,188,0.25)");
+    totalGradient.addColorStop(1, "rgba(38,113,188,0)");
+
     const totalLabels = data.trend_total.map(d => d.periode);
     const totalValues = data.trend_total.map(d => d.jumlah_transaksi);
 
-    chartTotal = new Chart(
-      document.getElementById("trendTotal"),
-      {
-        type: "line",
-        data: {
-          labels: totalLabels,
-          datasets: [{
-            data: totalValues,
-            borderColor: "#326199",
-            backgroundColor: "rgba(51, 155, 199, 1)",
-            borderWidth: 3,
-            tension: 0,
-            fill: false,
-            pointRadius: 3,
-            pointHoverRadius: 3
-          }]
-        },
-        options: baseLineOptions(false)
+    const totalHoverLine = {
+      id: "totalHoverLine",
+      afterDraw(chart) {
+        const active = chart.tooltip?.getActiveElements();
+        if (!active || !active.length) return;
+        const { ctx, chartArea } = chart;
+        const x = active[0].element.x;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#8ECAE6";
+        ctx.stroke();
+        ctx.restore();
       }
-    );
+    };
 
+    chartTotal = new Chart(totalCtx, {
+      type: "line",
+      data: {
+        labels: totalLabels,
+        datasets: [{
+          label: "Jumlah",
+          data: totalValues,
+          borderColor: "#2671BC",
+          backgroundColor: totalGradient,
+          fill: true,
+          tension: 0.35,
+          borderWidth: 3,
+          pointRadius: 4,
+          pointHoverRadius: 7,
+          pointBackgroundColor: "#2671BC",
+          pointBorderColor: "#fff",
+          pointBorderWidth: 2
+        }]
+      },
+      options: baseLineOptions(false), 
+      plugins: [totalHoverLine, {
+        id: "customTooltip",
+        beforeEvent: (chart, args) => {
+          if (args.event.type === "tooltip") {
+            const tooltip = chart.tooltip;
+            tooltip.options.callbacks.label = ctx => `Jumlah: ${ctx.parsed.y}`;
+          }
+        }
+      }]
+    });
+
+    // ================= TREND METODE =================
+    const metodeCtx = document.getElementById("trendMetode").getContext("2d");
     const metodeLabels = [...new Set(data.trend_metode.map(d => d.periode))];
     const metodeTypes = [...new Set(data.trend_metode.map(d => d.penjualan))];
 
-    const datasetsMetode = metodeTypes.map((type, i) => ({
-      label: type,
-      data: metodeLabels.map(p => {
-        const x = data.trend_metode.find(d => d.periode === p && d.penjualan === type);
-        return x ? x.jumlah_transaksi : 0;
-      }),
-      borderColor: COLORS[i % COLORS.length],
-      backgroundColor: COLORS[i % COLORS.length] + "22",
-      borderWidth: 2,
-      tension: 0,
-      fill: false,
-      pointRadius: 2
-    }));
+    const metodeDatasets = metodeTypes.map((type, i) => {
+      const g = metodeCtx.createLinearGradient(0, 0, 0, 300);
+      if (i === 0) { g.addColorStop(0,"rgba(233,119,0,0.35)"); g.addColorStop(1,"rgba(199,51,51,0)"); }
+      else { g.addColorStop(0,"rgba(255,183,3,0.35)"); g.addColorStop(1,"rgba(233,119,0,0)"); }
 
-    chartMetode = new Chart(
-      document.getElementById("trendMetode"),
-      {
-        type: "line",
-        data: {
-          labels: metodeLabels,
-          datasets: datasetsMetode
-        },
-        options: baseLineOptions(false)
+      return {
+        label: type,
+        data: metodeLabels.map(p => {
+          const x = data.trend_metode.find(d => d.periode === p && d.penjualan === type);
+          return x ? x.jumlah_transaksi : 0;
+        }),
+        borderColor: i === 0 ? "#C73333" : "#E97700",
+        backgroundColor: g,
+        fill: "origin",
+        tension: 0.35,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        pointBackgroundColor: i === 0 ? "#C73333" : "#E97700",
+        pointBorderColor: "#fff",
+        pointBorderWidth: 2
+      };
+    });
+
+    const metodeHoverLine = {
+      id: "metodeHoverLine",
+      afterDraw(chart) {
+        const active = chart.tooltip?.getActiveElements();
+        if (!active || !active.length) return;
+        const { ctx, chartArea } = chart;
+        const x = active[0].element.x;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#e5e7eb";
+        ctx.stroke();
+        ctx.restore();
       }
-    );
+    };
 
+    chartMetode = new Chart(metodeCtx, {
+      type: "line",
+      data: { labels: metodeLabels, datasets: metodeDatasets },
+      options: baseLineOptions(false),
+      plugins: [metodeHoverLine]
+    });
+
+    // ================= TREND FINCO =================
+    const fincoCtx = document.getElementById("trendFinco").getContext("2d");
     const fincoLabels = [...new Set(data.trend_finco.map(d => d.periode))];
     const fincoTypes = data.rank_finco;
 
-    const datasetsFinco = fincoTypes.map((finco, i) => ({
-      label: finco,
-      data: fincoLabels.map(p => {
-        const x = data.trend_finco.find(d => d.periode === p && d.finco === finco);
-        return x ? x.jumlah_transaksi : 0;
-      }),
-      borderColor: COLORS[i % COLORS.length],
-      backgroundColor: COLORS[i % COLORS.length] + "22",
-      borderWidth: 2,
-      tension: 0,
-      fill: false,
-      pointRadius: 3
-    }));
+    const fincoGradients = [
+      ["#C73333","#D1470B"],
+      ["#D1470B","#E97700"],
+      ["#E97700","#FFB703"],
+      ["#FFB703","#8ECAE6"],
+      ["#8ECAE6","#2671BC"]
+    ];
 
-    chartFinco = new Chart(
-      document.getElementById("trendFinco"),
-      {
-        type: "line",
-        data: {
-          labels: fincoLabels,
-          datasets: datasetsFinco
-        },
-        options: baseLineOptions(false)
+    const datasetsFinco = fincoTypes.map((finco,i)=>{
+      const g = fincoCtx.createLinearGradient(0,0,0,300);
+      const [c1,c2] = fincoGradients[i % fincoGradients.length];
+      g.addColorStop(0, `${c1}55`);
+      g.addColorStop(1, `${c2}00`);
+      return {
+        label: finco,
+        data: fincoLabels.map(p=>{
+          const x = data.trend_finco.find(d=>d.periode===p && d.finco===finco);
+          return x ? x.jumlah_transaksi : 0;
+        }),
+        borderColor: c2,
+        backgroundColor: g,
+        fill: "origin",
+        tension: 0.35,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        pointBackgroundColor: c2,
+        pointBorderColor: "#fff",
+        pointBorderWidth: 2
+      };
+    });
+
+    const fincoHoverLine = {
+      id:"fincoHoverLine",
+      afterDraw(chart){
+        const active = chart.tooltip?.getActiveElements();
+        if(!active||!active.length) return;
+        const {ctx,chartArea}=chart;
+        const x = active[0].element.x;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x,chartArea.top);
+        ctx.lineTo(x,chartArea.bottom);
+        ctx.lineWidth=1;
+        ctx.strokeStyle="#e5e7eb";
+        ctx.stroke();
+        ctx.restore();
       }
-    );
-  }
+    };
+
+    chartFinco = new Chart(fincoCtx,{
+      type:"line",
+      data:{ labels:fincoLabels, datasets:datasetsFinco },
+      options: baseLineOptions(false),
+      plugins:[fincoHoverLine]
+    });
+
+  } // <-- akhir renderCharts
 
   renderCharts(topSelect.value);
   topSelect.addEventListener("change", () => renderCharts(topSelect.value));
-}
 
-function baseLineOptions(showLegend = true) {
+} // <-- akhir loadTrend
+
+// BaseLineOptions modern
+function baseLineOptions(showLegend=true){
   return {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: showLegend,
-        position: "top",
-        labels: {
-          usePointStyle: true,
-          boxWidth: 8
-        }
+    responsive:true,
+    maintainAspectRatio:false,
+    interaction:{ mode:"index", intersect:false },
+    plugins:{
+      legend:{
+        display:showLegend,
+        position:"top",
+        labels:{ usePointStyle:true, boxWidth:8 }
       },
-      tooltip: {
-        mode: "index",
-        intersect: false
+      tooltip:{
+        backgroundColor:"#fff",
+        titleColor:"#111",
+        bodyColor:"#333",
+        borderColor:"#e5e7eb",
+        borderWidth:1,
+        padding:12,
+        cornerRadius:10,
+        displayColors:true,
+        callbacks:{ label: ctx=>`${ctx.dataset.label}: ${ctx.parsed.y}` }
       }
+    },
+    scales:{
+      x:{ grid:{ display:false }, ticks:{ color:"#9ca3af" } },
+      y:{ beginAtZero:true, grid:{ color:"#f1f5f9", drawBorder:false }, ticks:{ color:"#9ca3af" } }
     }
   };
 }
@@ -775,9 +1179,7 @@ async function loadPenjualan(filter = "top5") {
 
   const COLORS = ["#326199", "#4FB1A1", "#FCC055", "#EB8D50", "#DF6E5B"];
 
-  // =====================
   // FETCH DATA PENJUALAN
-  // =====================
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
 
@@ -790,84 +1192,110 @@ async function loadPenjualan(filter = "top5") {
 
   if (chartPie) chartPie.destroy();
 
-  chartPie = new Chart(piePenjualan, {
-    type: "bar",
-    data: {
-      labels: pieLabels,
-      datasets: [{
-        data: pieValues,
-        backgroundColor: COLORS
-      }]
-    },
-    options: {
-      plugins: {
-        legend: {
-          display: false
-        },
-        tooltip: {
-          enabled: true,       
-          mode: 'index',       
-          intersect: false,    
-          callbacks: {
-            label: function (context) {
-              return `Jumlah: ${context.parsed.y}`; 
-            }
-          }
-        }
+  const ctxPie = document.getElementById("piePenjualan").getContext("2d");
+
+  // Pakai 2 warna solid
+  const PIE_COLORS = ["#E97700", "#FFB703"];
+  const pieColors = pieValues.map((_, i) => PIE_COLORS[i % PIE_COLORS.length]);
+
+  chartPie = new Chart(ctxPie, {
+      type: "bar",
+      data: {
+          labels: pieLabels,
+          datasets: [{
+              label: "Jumlah Penjualan",
+              data: pieValues,
+              backgroundColor: pieColors, // pakai warna solid
+              borderRadius: 10
+          }]
       },
-      hover: {
-        mode: 'index',
-        intersect: false
+      options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+              legend: { display: false },
+              tooltip: {
+                  enabled: true,
+                  mode: 'index',
+                  intersect: false,
+                  callbacks: {
+                      label: context => `Jumlah: ${context.parsed.y}`
+                  }
+              },
+              datalabels: {
+                  anchor: 'end',
+                  align: 'end',
+                  offset: 6,
+                  color: '#333',
+                  font: { weight: 'bold', size: 12 },
+                  formatter: value => value.toLocaleString()
+              }
+          },
+          scales: {
+              x: { ticks: { font: { size: 11 } } },
+              y: { beginAtZero: true, grid: { display: false }, ticks: { font: { size: 11 } } }
+          },
+          animation: { duration: 1500, easing: 'easeOutQuart' }
       },
-      responsive: true,
-      maintainAspectRatio: false
-    }
+      plugins: [ChartDataLabels]
   });
 
   // BAR FINCO (HORIZONTAL)
   if (chartPenjualanFinco) chartPenjualanFinco.destroy();
 
-  chartPenjualanFinco = new Chart(
-    document.getElementById("barFinco"),
-    {
+  const ctxFinco = document.getElementById("barFinco").getContext("2d");
+  const barCount = data.finco.data.length;
+
+  const FINCO_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+
+  // Warna solid untuk tiap Finco
+  const fincoColors = data.finco.data.map((_, i) => FINCO_COLORS[i % FINCO_COLORS.length]);
+
+  chartPenjualanFinco = new Chart(ctxFinco, {
       type: "bar",
       data: {
-        labels: data.finco.data.map(d => d.finco),
-        datasets: [{
-          data: data.finco.data.map(d => d.jumlah_transaksi),
-          backgroundColor: COLORS
-        }]
+          labels: data.finco.data.map(d => d.finco),
+          datasets: [{
+              data: data.finco.data.map(d => d.jumlah_transaksi),
+              backgroundColor: fincoColors, // pakai warna solid
+              borderRadius: 10
+          }]
       },
       options: {
-        indexAxis: "y",   
-        plugins: {
-          legend: {
-            display: false
+          indexAxis: "y",
+          plugins: {
+              legend: { display: false },
+              tooltip: {
+                  enabled: true,
+                  mode: "index",
+                  intersect: false,
+                  callbacks: { label: ctx => `Jumlah: ${ctx.parsed.x}` }
+              },
+              datalabels: {
+                  anchor: 'end',
+                  align: 'end',
+                  color: '#333',
+                  font: { weight: 'bold', size: 12 },
+                  formatter: value => value.toLocaleString()
+              }
           },
-          tooltip: {
-            enabled: true,
-            mode: "nearest",
-            intersect: false,
-            callbacks: {
-              label: ctx => `Jumlah: ${ctx.parsed.x}` 
-            }
-          }
-        },
-        scales: {
-          x: {
-            beginAtZero: true,
-            grid: { color: "#eef2f7" }
+          scales: {
+              x: { 
+                  beginAtZero: true, 
+                  grid: { display: false },
+                  ticks: { font: { size: 11 } } 
+              },
+              y: { 
+                  grid: { drawTicks: false, color: '#eee' }, 
+                  ticks: { font: { size: 11 } } 
+              }
           },
-          y: {
-            grid: { display: false }
-          }
-        },
-        responsive: true,
-        maintainAspectRatio: false
-      }
-    }
-  );
-
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 1500, easing: 'easeOutQuart' }
+      },
+      plugins: [ChartDataLabels]
+  });
 
   // HANDLE FILTER FINCO
   document.getElementById("fincoFilter").addEventListener("change", async (e) => {
@@ -877,8 +1305,6 @@ async function loadPenjualan(filter = "top5") {
 
 async function loadProduk() {
   content.innerHTML = `<div class="produk-page"></div>`;
-
-  const COLORS = ["#326199", "#4FB1A1", "#FCC055", "#EB8D50", "#DF6E5B"];
 
   // FETCH DATA PRODUK
   const query = buildQuery(getGlobalFilters());
@@ -896,40 +1322,59 @@ async function loadProduk() {
 
   if (chartProdukTahun) chartProdukTahun.destroy();
 
-  chartProdukTahun = new Chart(document.getElementById("barTahunRakit"), {
+  const ctxTahun = document.getElementById("barTahunRakit").getContext("2d");
+  const penjualanData = data.penjualan_tahun_rakit;
+
+  const TAHUN_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+
+  // Warna solid untuk tiap tahun
+  const tahunColors = penjualanData.map((_, i) => TAHUN_COLORS[i % TAHUN_COLORS.length]);
+
+  chartProdukTahun = new Chart(ctxTahun, {
     type: "bar",
     data: {
-      labels: data.penjualan_tahun_rakit.map(d => d.tahun_rakit),
+      labels: penjualanData.map(d => d.tahun_rakit),
       datasets: [{
-        data: data.penjualan_tahun_rakit.map(d => d.jumlah_transaksi),
-        backgroundColor: COLORS
+        data: penjualanData.map(d => d.jumlah_transaksi),
+        backgroundColor: tahunColors, // pakai warna solid
+        borderRadius: 10
       }]
     },
     options: {
+      indexAxis: "x",
+      responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: {
-          enabled: true,        
-          mode: 'nearest',      
-          intersect: false,   
-          callbacks: {
-            label: function (context) {
-              return `Jumlah: ${context.parsed.y}`;  
-            }
-          }
+          enabled: true,
+          mode: "nearest",
+          intersect: false,
+          callbacks: { label: ctx => `Jumlah: ${ctx.parsed.y}` }
+        },
+        datalabels: {
+          color: "#333",
+          anchor: "end",
+          align: "end",
+          offset: 6,
+          font: { weight: "bold", size: 12 },
+          formatter: value => value.toLocaleString()
         }
       },
-      interaction: {
-        mode: 'nearest',
-        intersect: false
-      },
       scales: {
-        x: { ticks: { font: { size: 11 } } },
-        y: { ticks: { font: { size: 11 } } }
+        x: { 
+          beginAtZero: true,
+          grid: { color: "#eee", drawTicks: false, drawBorder: false, lineWidth: 1 }, 
+          ticks: { font: { size: 11 } } 
+        },
+        y: { 
+          grid: { display: false },
+          ticks: { font: { size: 11 } } 
+        }
       },
-      responsive: true,
-      maintainAspectRatio: false
-    }
+      animation: { duration: 1500, easing: "easeOutQuart" }
+    },
+    plugins: [ChartDataLabels]
   });
 
 // TABEL PENJUALAN PER TIPE KENDARAAN
@@ -1060,8 +1505,6 @@ async function loadPekerja() {
     </div>
   `;
 
-  const COLORS = ["#326199", "#4FB1A1", "#FCC055", "#EB8D50", "#DF6E5B"];
-
   // FETCH DATA PEKERJA
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
@@ -1074,38 +1517,59 @@ async function loadPekerja() {
 
   if (chartSupervisor) chartSupervisor.destroy();
 
-  chartSupervisor = new Chart(document.getElementById("barSupervisor"), {
+  const ctxSup = document.getElementById("barSupervisor").getContext("2d");
+  const barCount = supLabels.length;
+
+  const SUP_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+
+  // Pilih warna solid untuk tiap supervisor
+  const supColors = supLabels.map((_, i) => SUP_COLORS[i % SUP_COLORS.length]);
+
+  chartSupervisor = new Chart(ctxSup, {
     type: "bar",
     data: {
       labels: supLabels,
       datasets: [{
         data: supValues,
-        backgroundColor: COLORS
+        backgroundColor: supColors, // pakai warna solid
+        borderRadius: 10
       }]
     },
     options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: {
-          display: false
-        },
+        legend: { display: false },
         tooltip: {
-          enabled: true,      
-          mode: 'index',       
-          intersect: false,    
-          callbacks: {
-            label: function (context) {
-              return `Jumlah: ${context.parsed.y}`; // teks tooltip
-            }
-          }
+          enabled: true,
+          mode: "index",
+          intersect: false,
+          callbacks: { label: ctx => `Jumlah: ${ctx.parsed.x}` }
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          offset: 6,
+          color: "#333",
+          font: { weight: "bold", size: 12 },
+          formatter: value => value.toLocaleString()
         }
       },
-      hover: {
-        mode: 'index',
-        intersect: false
+      scales: {
+        x: { 
+          beginAtZero: true, 
+          grid: { display: false }, 
+          ticks: { font: { size: 11 } } 
+        },
+        y: { 
+          grid: { drawTicks: false, color: "#eee", lineWidth: 1 },
+          ticks: { font: { size: 11 } } 
+        }
       },
-      responsive: true,
-      maintainAspectRatio: false
-    }
+      animation: { duration: 1500, easing: "easeOutQuart" }
+    },
+    plugins: [ChartDataLabels]
   });
 
   // TABEL RINGKASAN WIRANIAGA 
@@ -1173,7 +1637,7 @@ async function loadPelanggan() {
 
       <!-- TABEL TRANSAKSI PER CUSTOMER -->
       <div class="card">
-        <h3>Jumlah Transaksi per Customer</h3>
+        <h3>Jumlah Transaksi dan Total Pengeluaran Per Customer</h3>
         <div class="table-wrapper" style="max-height:300px; overflow:auto;">
           <table id="tableTransaksiCustomer" class="table">
             <thead>
@@ -1182,6 +1646,7 @@ async function loadPelanggan() {
                 <th>Customer Key</th>
                 <th>Nama Customer</th>
                 <th>Jumlah Transaksi</th>
+                <th>Total Pengeluaran</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -1223,9 +1688,6 @@ async function loadPelanggan() {
     </div>
   `;
 
-  const COLORS = ["#326199", "#4FB1A1", "#FCC055", "#EB8D50", "#DF6E5B",
-    "#2D5496", "#3BA298", "#FCD77B", "#F29E6B", "#D96957"];
-
   // Ambil data dari backend
   const query = buildQueryWithExtra();
   const res = await fetch(`http://localhost:8000/pelanggan?${query}`);
@@ -1241,54 +1703,71 @@ async function loadPelanggan() {
       <td>${item.customer_key}</td>
       <td>${item.nama_customer}</td>
       <td>${item.jumlah_transaksi}</td>
+      <td style="text-align:right;">
+        Rp ${Number(item.total_pengeluaran).toLocaleString("id-ID")}
+      </td>
     `;
     tbodyCustomer.appendChild(tr);
   });
 
   // PIE CHART SEGMENTASI
   if (chartPie) chartPie.destroy();
-  chartPie = new Chart(document.getElementById("pieSegmentasi"), {
+
+  const ctxSegmentasi = document.getElementById("pieSegmentasi").getContext("2d");
+  const segLabels = data.segmentasi.map(d => d.segment);
+  const segValues = data.segmentasi.map(d => d.jumlah_customer);
+
+  // Pakai 3 warna solid
+  const SEGMENT_COLORS = ["#E97700", "#FFB703", "#8ECAE6"];
+  const colors = segValues.map((_, i) => SEGMENT_COLORS[i % SEGMENT_COLORS.length]);
+
+  chartPie = new Chart(ctxSegmentasi, {
     type: "bar",
     data: {
-      labels: data.segmentasi.map(d => d.segment),
+      labels: segLabels,
       datasets: [{
-        data: data.segmentasi.map(d => d.jumlah_customer),
-        backgroundColor: COLORS
+        data: segValues,
+        backgroundColor: colors, // pakai 3 warna solid
+        borderRadius: 10
       }]
     },
     options: {
-      indexAxis: "y", 
-      plugins: {
-        legend: {
-          display: false
-        },
-        tooltip: {
-          enabled: true,
-          mode: 'index',
-          intersect: false,
-          callbacks: {
-            label: function (context) {
-              return `Jumlah: ${context.parsed.x}`; 
-            }
-          }
-        }
-      },
-      hover: {
-        mode: 'index',
-        intersect: false
-      },
+      indexAxis: "x", 
       responsive: true,
       maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `Jumlah: ${ctx.parsed.y}`
+          }
+        },
+        datalabels: {
+          anchor: "end",
+          align: "top",
+          color: "#333",
+          font: { weight: "bold", size: 12 }
+        }
+      },
       scales: {
         x: {
-          beginAtZero: true,
-          grid: { color: "#eef2f7" }
+          grid: {
+            display: true,     
+            color: "#eee",
+            lineWidth: 1
+          },
+          ticks: {
+            font: { size: 11 }
+          }
         },
         y: {
-          grid: { display: false }
+          beginAtZero: true,
+          grid: { display: false },
+          ticks: { font: { size: 11 } }
         }
       }
-    }
+    },
+    plugins: [ChartDataLabels]
   });
 
   // ===== DROPDOWN CUSTOMER LOYAL MODERN =====
@@ -1318,7 +1797,6 @@ async function loadPelanggan() {
 
     try {
       const queryCustomer = buildQueryWithExtra({ customer_key: customerKey });
-
       const res = await fetch(`http://localhost:8000/pelanggan?${queryCustomer}`);
       const data2 = await res.json();
 
@@ -1326,7 +1804,7 @@ async function loadPelanggan() {
       const ctx = document.getElementById("lineTrendCustomer").getContext("2d");
 
       if (trend.length === 0) {
-        // Data kosong
+        if (chartTrend) chartTrend.destroy();
         chartTrend = new Chart(ctx, {
           type: "line",
           data: { labels: [], datasets: [] },
@@ -1342,43 +1820,80 @@ async function loadPelanggan() {
         return;
       }
 
+      const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+      gradient.addColorStop(0, "rgba(255, 183, 3, 0.35)");
+      gradient.addColorStop(1, "rgba(142, 202, 230, 0)");
+
+      const hoverLine = {
+        id: "hoverLine",
+        afterDraw(chart) {
+          const active = chart.tooltip?.getActiveElements();
+          if (!active || !active.length) return;
+          const { ctx, chartArea } = chart;
+          const x = active[0].element.x;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = "#FFB703";
+          ctx.stroke();
+          ctx.restore();
+        }
+      };
+
+      if (chartTrend) chartTrend.destroy();
       chartTrend = new Chart(ctx, {
         type: "line",
         data: {
           labels: trend.map(d => d.bulan),
           datasets: [{
-            label: "Jumlah Transaksi",
+            label: "Jumlah",
             data: trend.map(d => d.jumlah_transaksi),
-            borderColor: "#4FB1A1",
-            backgroundColor: "rgba(79, 177, 161, 0.2)",
-            fill: true,
-            tension: 0.5,      
+            borderColor: "#8ECAE6",
+            backgroundColor: gradient,
+            fill: "origin",
+            tension: 0.35,
+            borderWidth: 3,
             pointRadius: 4,
-            pointHoverRadius: 6,
-            pointBackgroundColor: "#326199"
+            pointHoverRadius: 7,
+            pointBackgroundColor: "#8ECAE6",
+            pointBorderColor: "#fff",
+            pointBorderWidth: 2
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           interaction: {
-            mode: 'nearest',
+            mode: "index",
             intersect: false
           },
           plugins: {
-            legend: { display: false, position: "top" },
+            legend: { display: false },
             tooltip: {
-              mode: "index",
-              intersect: false,
+              backgroundColor: "#fff",
+              titleColor: "#111",
+              bodyColor: "#333",
+              borderColor: "#8ECAE6",
+              borderWidth: 1,
+              padding: 12,
+              cornerRadius: 10,
+              displayColors: false,
               callbacks: { label: ctx => `Jumlah: ${ctx.parsed.y}` }
             },
-            title: { display: false, text: `Tren Transaksi Customer: ${dropdownCustomer.selectedOptions[0].text}`, font: { size: 16 } }
+            title: {
+              display: false,
+              text: `Tren Transaksi Customer: ${dropdownCustomer.selectedOptions[0].text}`,
+              font: { size: 16 }
+            }
           },
           scales: {
             x: { grid: { color: "#f0f2f5" }, ticks: { font: { size: 12 } } },
             y: { beginAtZero: true, grid: { color: "#f0f2f5" }, ticks: { font: { size: 12 }, stepSize: 5 } }
           }
-        }
+        },
+        plugins: [hoverLine]
       });
 
     } catch (err) {
@@ -1387,58 +1902,60 @@ async function loadPelanggan() {
     }
   });
 
-  //BAR CHART DISTRIBUSI PEKERJAAN VERTICAL SIMPLE
+  //BAR CHART DISTRIBUSI PEKERJAAN
   if (chartBar) chartBar.destroy();
 
   const ctxBar = document.getElementById("barPekerjaan").getContext("2d");
+  const pekerjaanData = data.distribusi_pekerjaan;
 
+  const PEKERJA_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+
+  const barColors = pekerjaanData.map((_, i) => PEKERJA_COLORS[i % PEKERJA_COLORS.length]);
+
+  /* ===== CHART ===== */
   chartBar = new Chart(ctxBar, {
     type: "bar",
     data: {
-      labels: data.distribusi_pekerjaan.map(d => d.pekerjaan),
+      labels: pekerjaanData.map(d => d.pekerjaan),
       datasets: [{
-        label: "Jumlah Transaksi",
-        data: data.distribusi_pekerjaan.map(d => d.jumlah_transaksi),
-        backgroundColor: COLORS, 
-        borderRadius: 0           
+        data: pekerjaanData.map(d => d.jumlah_transaksi),
+        backgroundColor: barColors, // pakai warna solid
+        borderRadius: 10
       }]
     },
     options: {
-      indexAxis: 'x',         
+      indexAxis: "x", 
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          enabled: true,
-          mode: 'index',
-          intersect: false,
-          callbacks: {
-            label: context => `Jumlah: ${context.parsed.y}`
-          }
-        },
-        title: {
-          display: false,
-          text: "Distribusi Transaksi per Pekerjaan",
-          font: { size: 16 }
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          color: "#333",
+          font: { weight: "bold", size: 12 },
+          formatter: v => v.toLocaleString()
         }
       },
       scales: {
         x: {
-          grid: { display: false },
-          ticks: { font: { size: 12 } }
+          grid: {
+            display: true,     
+            color: "#eee",
+            lineWidth: 1
+          },
+          ticks: {
+            font: { size: 11 }
+          }
         },
         y: {
           beginAtZero: true,
-          grid: { color: "#f0f2f5" },
-          ticks: { font: { size: 12 }, stepSize: 5 }
+          grid: { display: false },
+          ticks: { font: { size: 11 } }
         }
-      },
-      hover: {
-        mode: 'nearest',
-        intersect: true
       }
-    }
+    },
+    plugins: [ChartDataLabels]
   });
 
   // ===== DROPDOWN PEKERJAAN MODERN =====
@@ -1461,15 +1978,16 @@ async function loadPelanggan() {
       chartTrendPekerjaan = null;
     }
 
-    if (!pekerjaan) return; // Jika kosong, keluar
+    if (!pekerjaan) return;
 
     try {
       const res = await fetch(`http://localhost:8000/pelanggan?pekerjaan=${encodeURIComponent(pekerjaan)}&${query}`);
       const data3 = await res.json();
 
-      if (!data3.trend_pekerjaan || data3.trend_pekerjaan.length === 0) {
-        // Data kosong → tampilkan alert atau chart kosong
-        const ctx = document.getElementById("lineTrendPekerjaan").getContext("2d");
+      const trend = data3.trend_pekerjaan || [];
+      const ctx = document.getElementById("lineTrendPekerjaan").getContext("2d");
+
+      if (trend.length === 0) {
         chartTrendPekerjaan = new Chart(ctx, {
           type: "line",
           data: { labels: [], datasets: [] },
@@ -1482,43 +2000,66 @@ async function loadPelanggan() {
         return;
       }
 
-      // Data ada → buat chart baru
-      const ctx = document.getElementById("lineTrendPekerjaan").getContext("2d");
+      const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+      gradient.addColorStop(0, "rgba(142, 202, 230, 0.35)");
+      gradient.addColorStop(1, "rgba(38, 113, 188, 0)");
+
+      const hoverLine = {
+        id: "hoverLine",
+        afterDraw(chart) {
+          const active = chart.tooltip?.getActiveElements();
+          if (!active || !active.length) return;
+          const { ctx, chartArea } = chart;
+          const x = active[0].element.x;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = "#8ECAE6";
+          ctx.stroke();
+          ctx.restore();
+        }
+      };
+
       chartTrendPekerjaan = new Chart(ctx, {
         type: "line",
         data: {
-          labels: data3.trend_pekerjaan.map(d => d.bulan),
+          labels: trend.map(d => d.bulan),
           datasets: [{
             label: pekerjaan,
-            data: data3.trend_pekerjaan.map(d => d.jumlah_transaksi),
-            borderColor: "#4FB1A1",
-            backgroundColor: "rgba(79, 177, 161, 0.2)",
-            fill: false,
-            tension: 0,        // garis smooth modern
+            data: trend.map(d => d.jumlah_transaksi),
+            borderColor: "#2671BC",
+            backgroundColor: gradient,
+            fill: "origin",
+            tension: 0.35,
+            borderWidth: 3,
             pointRadius: 4,
-            pointHoverRadius: 6,
-            pointBackgroundColor: "#326199"
+            pointHoverRadius: 7,
+            pointBackgroundColor: "#2671BC",
+            pointBorderColor: "#fff",
+            pointBorderWidth: 2
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           interaction: {
-            mode: 'nearest',
+            mode: "index",
             intersect: false
           },
           plugins: {
-            legend: {
-              display: false,
-              position: "top",
-              labels: { usePointStyle: true, boxWidth: 8 }
-            },
+            legend: { display: false },
             tooltip: {
-              mode: "index",
-              intersect: false,
-              callbacks: {
-                label: ctx => `Jumlah: ${ctx.parsed.y}`
-              }
+              backgroundColor: "#fff",
+              titleColor: "#111",
+              bodyColor: "#333",
+              borderColor: "#8ECAE6",
+              borderWidth: 1,
+              padding: 12,
+              cornerRadius: 10,
+              displayColors: false,
+              callbacks: { label: ctx => `Jumlah: ${ctx.parsed.y}` }
             },
             title: {
               display: false,
@@ -1528,22 +2069,19 @@ async function loadPelanggan() {
           },
           scales: {
             x: {
-              grid: { color: "#f0f2f5" },
+              grid: { display: false }, 
               ticks: { font: { size: 12 } }
             },
-            y: {
-              beginAtZero: true,
-              grid: { color: "#f0f2f5" },
-              ticks: { font: { size: 12 }, stepSize: 5 }
-            }
+            y: { beginAtZero: true, grid: { color: "#f0f2f5" }, ticks: { font: { size: 12 }, stepSize: 5 } }
           }
-        }
+        },
+        plugins: [hoverLine]
       });
 
-  } catch (err) {
-    console.error("Gagal fetch data pekerjaan:", err);
-    alert("Gagal mengambil data pekerjaan");
-  }
+    } catch (err) {
+      console.error("Gagal fetch data pekerjaan:", err);
+      alert("Gagal mengambil data pekerjaan");
+    }
 });
 }
 
@@ -1578,17 +2116,17 @@ content.innerHTML = `
     <div id="tableMetode"></div>
   </div>
 
-  <!-- FINCO -->
-  <div class="grid-2" style="margin-top:20px;">
+  <!-- FINCO (FULL WIDTH) -->
+  <div style="margin-top:20px;">
     <div class="card">
       <h3>FinCo Per Kecamatan</h3>
-      <canvas id="barFincoKecamatan" style="height:180px;"></canvas>
+      <canvas id="barFincoKecamatan" style="height:220px;"></canvas>
     </div>
-    <div id="tableFinco"></div>
   </div>
 `;
-
-  const COLORS = ["#326199","#4FB1A1","#FCC055","#EB8D50","#DF6E5B"];
+  document.getElementById("topFilter").addEventListener("change", e => {
+    loadWilayah(e.target.value);
+  });
 
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
@@ -1597,36 +2135,68 @@ content.innerHTML = `
   const data = await res.json();
 
   /* =====================================================
-     PENJUALAN KECAMATAN (BAR – URUT TERBANYAK)
+     PENJUALAN KECAMATAN
   ===================================================== */
   const penKec = data.penjualan_kecamatan
-    .sort((a,b)=>b.total_transaksi-a.total_transaksi);
+    .sort((a, b) => b.total_transaksi - a.total_transaksi);
 
-  new Chart(document.getElementById("barPenjualanKecamatan"), {
-    type:"bar",
-    data:{
-      labels: penKec.map(d=>d.kecamatan),
-      datasets:[{
-        data: penKec.map(d=>d.total_transaksi),
-        backgroundColor: COLORS,
-        borderRadius:0
+  const ctxKec = document
+    .getElementById("barPenjualanKecamatan")
+    .getContext("2d");
+
+  const GRAD_KEC_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+
+  const kecColors = penKec.map((_, i) => GRAD_KEC_COLORS[i % GRAD_KEC_COLORS.length]);
+
+  new Chart(ctxKec, {
+    type: "bar",
+    data: {
+      labels: penKec.map(d => d.kecamatan),
+      datasets: [{
+        data: penKec.map(d => d.total_transaksi),
+        backgroundColor: kecColors,
+        borderRadius: 10
       }]
     },
-    options:{
-      responsive:true,
-      plugins:{
-        legend:{ display:false },
-        tooltip:{
-          callbacks:{ label:c=>`Jumlah: ${c.parsed.y}` }
+    options: {
+      indexAxis: "x",
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => items?.[0]?.label ?? "",
+            label: ctx => `Total: ${(ctx.parsed.y ?? 0).toLocaleString()}`
+          }
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          offset: 2,
+          color: "#333",
+          font: { weight: "bold", size: 12 },
+          formatter: v => v.toLocaleString()
         }
       },
-      scales:{ y:{ beginAtZero:true }}
-    }
+      scales: {
+        x: {
+          grid: {
+            display: true,     
+            color: "#eee",
+            lineWidth: 1
+          },
+          ticks: { font: { size: 11 } }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { display: false },
+          ticks: { font: { size: 11 } }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
   });
-
-  /* =====================================================
-     TABEL PENJUALAN KELURAHAN (OTOMATIS SESUAI CARD)
-  ===================================================== */
+  
   document.getElementById("tablePenjualan").innerHTML = buildAutoTable(
     "Penjualan Per Kelurahan",
     ["Kelurahan","Jumlah"],
@@ -1636,124 +2206,218 @@ content.innerHTML = `
   );
 
   /* =====================================================
-     METODE – BAR (URUT BERDASARKAN TOTAL TRANSAKSI)
+     METODE
   ===================================================== */
   const metodeGrouped = {};
-  data.metode_penjualan_kecamatan.forEach(d=>{
-    metodeGrouped[d.kecamatan] = (metodeGrouped[d.kecamatan]||0) + d.jumlah_transaksi;
+  data.metode_penjualan_kecamatan.forEach(d => {
+    metodeGrouped[d.kecamatan] =
+      (metodeGrouped[d.kecamatan] || 0) + d.jumlah_transaksi;
   });
 
   const kecMetode = Object.entries(metodeGrouped)
-    .sort((a,b)=>b[1]-a[1])
-    .map(d=>d[0]);
+    .sort((a, b) => b[1] - a[1])
+    .map(d => d[0]);
 
-  const metodeList = [...new Set(data.metode_penjualan_kecamatan.map(d=>d.penjualan))];
+  const metodeList = [...new Set(
+    data.metode_penjualan_kecamatan.map(d => d.penjualan)
+  )];
 
-  const datasetMetode = metodeList.map((m,i)=>({
-    data: kecMetode.map(k =>
-      data.metode_penjualan_kecamatan
-        .filter(d=>d.kecamatan===k && d.penjualan===m)
-        .reduce((s,x)=>s+x.jumlah_transaksi,0)
-    ),
-    backgroundColor: COLORS[i%COLORS.length]
-  }));
+  const ctxMetode = document
+    .getElementById("barMetodeKecamatan")
+    .getContext("2d");
 
-  new Chart(document.getElementById("barMetodeKecamatan"), {
-    type:"bar",
-    data:{ labels:kecMetode, datasets:datasetMetode },
-    options:{
-      responsive:true,
-      plugins:{
-        legend:{ display:false },
-        tooltip:{
-          callbacks:{ label:c=>`${metodeList[c.datasetIndex]}: ${c.parsed.y}` }
-        }
-      },
-      scales:{
-        x:{ stacked:true },
-        y:{ stacked:true, beginAtZero:true }
-      }
-    }
+  const METODE_COLORS = ["#FFB703", "#E97700"];
+
+  const datasetMetode = metodeList.map((metode, i) => {
+    const color = METODE_COLORS[i % METODE_COLORS.length]; // pakai warna solid
+    return {
+      label: metode,
+      data: kecMetode.map(kec =>
+        data.metode_penjualan_kecamatan
+          .filter(d => d.kecamatan === kec && d.penjualan === metode)
+          .reduce((sum, x) => sum + x.jumlah_transaksi, 0)
+      ),
+      backgroundColor: color,
+      borderRadius: 10
+    };
   });
 
-  /* =====================================================
-     TABEL METODE KELURAHAN (OTOMATIS SESUAI CARD)
-  ===================================================== */
+  new Chart(ctxMetode, {
+    type: "bar",
+    data: {
+      labels: kecMetode,
+      datasets: datasetMetode
+    },
+    options: {
+      indexAxis: "x",
+      responsive: true,
+      interaction: {
+        mode: "index",
+        intersect: false
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => items?.[0]?.label ?? "",
+            label: ctx =>
+              `${ctx.dataset.label}: ${(ctx.parsed.y ?? 0).toLocaleString()}`
+          }
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          offset: 2,
+          color: "#333",
+          font: { weight: "bold", size: 12 },
+          formatter: v => v.toLocaleString()
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: {
+            display: true,
+            color: "#e5e7eb",
+            drawBorder: false
+          },
+          ticks: { padding: 6 }
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          grid: { display: false }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+
   document.getElementById("tableMetode").innerHTML = buildAutoTable(
     "Metode Penjualan Per Kelurahan",
     ["Kelurahan","Metode","Jumlah"],
     data.metode_penjualan_kelurahan
-      .sort((a,b)=>b.jumlah_transaksi-a.jumlah_transaksi)
       .map(d=>[d.kelurahan, d.penjualan, d.jumlah_transaksi])
   );
 
   /* =====================================================
-     FINCO – BAR (URUT TOTAL TERBANYAK)
+     FINCO (FULL BAR – TANPA TABEL)
   ===================================================== */
   const fincoGrouped = {};
-  data.finco_kecamatan.forEach(d=>{
-    fincoGrouped[d.kecamatan] = (fincoGrouped[d.kecamatan]||0) + d.jumlah_transaksi;
+  data.finco_kecamatan.forEach(d => {
+    fincoGrouped[d.kecamatan] =
+      (fincoGrouped[d.kecamatan] || 0) + d.jumlah_transaksi;
   });
 
   const kecFinco = Object.entries(fincoGrouped)
-    .sort((a,b)=>b[1]-a[1])
-    .map(d=>d[0]);
+    .sort((a, b) => b[1] - a[1])
+    .map(d => d[0]);
 
-  const fincoList = [...new Set(data.finco_kecamatan.map(d=>d.finco))];
+  const fincoList = [...new Set(
+    data.finco_kecamatan.map(d => d.finco)
+  )];
 
-  const datasetFinco = fincoList.map((f,i)=>({
-    data: kecFinco.map(k =>
-      data.finco_kecamatan
-        .filter(d=>d.kecamatan===k && d.finco===f)
-        .reduce((s,x)=>s+x.jumlah_transaksi,0)
-    ),
-    backgroundColor: COLORS[i%COLORS.length]
-  }));
+  const ctxFinco = document
+    .getElementById("barFincoKecamatan")
+    .getContext("2d");
 
-  new Chart(document.getElementById("barFincoKecamatan"), {
-    type:"bar",
-    data:{ labels:kecFinco, datasets:datasetFinco },
-    options:{
-      responsive:true,
-      plugins:{
-        legend:{ display:false },
-        tooltip:{
-          callbacks:{ label:c=>`${fincoList[c.datasetIndex]}: ${c.parsed.y}` }
-        }
+  const FINCO_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+
+  const datasetFinco = fincoList.map((finco, i) => {
+    const color = FINCO_COLORS[i % FINCO_COLORS.length]; // pakai warna solid
+    return {
+      label: finco,
+      data: kecFinco.map(kec =>
+        data.finco_kecamatan
+          .filter(d => d.kecamatan === kec && d.finco === finco)
+          .reduce((sum, x) => sum + x.jumlah_transaksi, 0)
+      ),
+      backgroundColor: color,
+      borderRadius: ctx => {
+        const datasets = ctx.chart.data.datasets;
+        return ctx.datasetIndex === datasets.length - 1 ? 10 : 0;
       },
-      scales:{
-        x:{ stacked:true },
-        y:{ stacked:true, beginAtZero:true }
-      }
-    }
+      borderSkipped: false
+    };
   });
 
-  /* =====================================================
-     TABEL FINCO KELURAHAN (OTOMATIS SESUAI CARD)
-  ===================================================== */
-  document.getElementById("tableFinco").innerHTML = buildAutoTable(
-    "FinCo Per Kelurahan",
-    ["Kelurahan","FinCo","Jumlah"],
-    data.finco_kelurahan
-      .sort((a,b)=>b.jumlah_transaksi-a.jumlah_transaksi)
-      .map(d=>[d.kelurahan, d.finco, d.jumlah_transaksi])
-  );
-
-  document.getElementById("topFilter").addEventListener("change", e=>{
-    loadWilayah(e.target.value);
+  new Chart(ctxFinco, {
+    type: "bar",
+    data: {
+      labels: kecFinco,
+      datasets: datasetFinco
+    },
+    options: {
+      indexAxis: "x",
+      responsive: true,
+      interaction: {
+        mode: "index",
+        intersect: false
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => items?.[0]?.label ?? "",
+            label: ctx =>
+              `${ctx.dataset.label}: ${(ctx.parsed.y ?? 0).toLocaleString()}`,
+            footer: items => {
+              let total = 0;
+              (items ?? []).forEach(i => {
+                total += i?.parsed?.y ?? 0;
+              });
+              return `Total: ${total.toLocaleString()}`;
+            }
+          }
+        },
+        datalabels: {
+          color: "#333",
+          font: { weight: "bold", size: 13 },
+          anchor: "end",
+          align: "end",
+          formatter: function (value, context) {
+            const datasets = context.chart.data.datasets;
+            const idx = context.dataIndex;
+            if (context.datasetIndex !== datasets.length - 1) return null;
+            let total = 0;
+            datasets.forEach(ds => {
+              total += ds.data?.[idx] ?? 0;
+            });
+            return total.toLocaleString();
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: {
+            display: true,
+            color: "#e5e7eb"
+          }
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          grid: {
+            display: false
+          }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
   });
 }
 
 /* =====================================================
-   HELPER: TABLE OTOMATIS SESUAI CARD
+   HELPER TABLE
 ===================================================== */
 function buildAutoTable(title, headers, rows){
   let html = `
     <div class="card" style="padding:12px; display:flex; flex-direction:column; height:100%;">
       <h3 style="font-size:14px;margin-bottom:8px">${title}</h3>
       <div style="flex:1; max-height:200px; overflow-y:auto;">
-        <table class="table" style="width:100%; font-size:12px; border-collapse:collapse;">
-          <thead style="position:sticky; top:0; background:#fff; z-index:1;">
+        <table class="table" style="width:100%; font-size:12px;">
+          <thead style="position:sticky; top:0; background:#fff;">
             <tr><th>No</th>${headers.map(h=>`<th>${h}</th>`).join("")}</tr>
           </thead>
           <tbody>
@@ -1765,7 +2429,6 @@ function buildAutoTable(title, headers, rows){
   return html;
 }
 
-
 function loadUnduhData() {
   content.innerHTML = `
     <div class="card">
@@ -1775,7 +2438,7 @@ function loadUnduhData() {
           <label>Jenis Data</label>
           <select id="jenisData">
             <option value="penjualan">Penjualan</option>
-            <option value="status_sales">Status Transaksi Sales</option>
+            <option value="status_sales">Rekap DKH</option>
           </select>
         </div>
 
