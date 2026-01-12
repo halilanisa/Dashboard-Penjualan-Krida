@@ -24,12 +24,18 @@ if not DATABASE_URL:
 engine = create_engine(DATABASE_URL)
 app = FastAPI()
 
+from fastapi.staticfiles import StaticFiles
+import os
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount frontend folder
+app.mount("/frontend", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "../frontend")), name="frontend")
 
 SCOPE = [
     "https://spreadsheets.google.com/feeds",
