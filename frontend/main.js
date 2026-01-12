@@ -95,9 +95,12 @@ function buildQuery(params) {
   return q.toString();
 }
 
+const BASE_URL = "https://dashboard-penjualan-krida-production.up.railway.app";
+
 async function loadFilters() {
-  const res = await fetch("http://localhost:8000/filters")
-  const data = await res.json()
+  const res = await fetch(`${BASE_URL}/filters`);
+  const data = await res.json();
+  console.log(data); // cek data yang diterima
 
   fillSelect("filter-penjualan", data.penjualan)
   fillSelect("filter-wiraniaga", data.wiraniaga)
@@ -157,18 +160,21 @@ function updatePage(page) {
 /* =====================
    REFRESH
 ===================== */
+
 async function refreshData() {
   try {
-    const res = await fetch("http://localhost:8000/refresh", {
+    const res = await fetch(`${BASE_URL}/refresh`, {
       method: "POST"
     });
 
     const data = await res.json();
-    alert(data.message);
+    alert(data.message);  // menampilkan pesan dari backend
   } catch (err) {
-    alert("Gagal refresh data");
+    alert("Gagal refresh data"); // error handling
+    console.error(err); // optional: tampilkan error di console
   }
 }
+
 
 /* =====================
    PAGES
@@ -284,7 +290,7 @@ async function loadOverview() {
     }, 0);
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
-  const res = await fetch(`http://localhost:8000/overview?${query}`);
+  const res = await fetch(`${BASE_URL}/overview?${query}`);
   const data = await res.json();
   const p = data.penjualan;
 
@@ -802,7 +808,7 @@ async function reloadTransaksiSales() {
   if (salesEnd) filters.sales_end_date = salesEnd;
 
   const query = buildQuery(filters);
-  const res = await fetch(`http://localhost:8000/overview?${query}`);
+  const res = await fetch(`${BASE_URL}/overview?${query}`);
   const data = await res.json();
 
   renderTransaksiSalesChart(data);
@@ -837,7 +843,7 @@ async function loadPerformaSales() {
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
 
-  const res = await fetch(`http://localhost:8000/performa-sales?${query}`);
+  const res = await fetch(`${BASE_URL}/performa-sales?${query}`);
   const data = await res.json();
 
   const [bulan1, bulan2, bulan3] = data.periode;
@@ -929,8 +935,9 @@ async function loadTrend() {
   async function renderCharts(topOption = "Top 5") {
     const filters = getGlobalFilters();
     const query = buildQuery(filters);
-    const res = await fetch(`http://localhost:8000/trend?top_n=${topOption}&${query}`);
-    const data = await res.json();
+
+  const res = await fetch(`${BASE_URL}/trend?top_n=${topOption}&${query}`);
+  const data = await res.json();
 
     if (chartTotal) chartTotal.destroy();
     if (chartMetode) chartMetode.destroy();
@@ -1182,8 +1189,7 @@ async function loadPenjualan(filter = "top5") {
   // FETCH DATA PENJUALAN
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
-
-  const res = await fetch(`http://localhost:8000/penjualan?top=${filter}&${query}`);
+  const res = await fetch(`${BASE_URL}/penjualan?top=${filter}&${query}`);
   const data = await res.json();
 
   // PIE METODE PENJUALAN
@@ -1309,7 +1315,7 @@ async function loadProduk() {
   // FETCH DATA PRODUK
   const query = buildQuery(getGlobalFilters());
 
-  const res = await fetch(`http://localhost:8000/produk?${query}`);
+  const res = await fetch(`${BASE_URL}/produk?${query}`);
   const data = await res.json();
 
   const page = document.querySelector(".produk-page");
@@ -1508,7 +1514,7 @@ async function loadPekerja() {
   // FETCH DATA PEKERJA
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
-  const res = await fetch(`http://localhost:8000/pekerja?${query}`);
+  const res = await fetch(`${BASE_URL}/pekerja?${query}`);
   const data = await res.json();
 
   // BAR PENJUALAN PER SUPERVISOR
@@ -1690,7 +1696,7 @@ async function loadPelanggan() {
 
   // Ambil data dari backend
   const query = buildQueryWithExtra();
-  const res = await fetch(`http://localhost:8000/pelanggan?${query}`);
+  const res = await fetch(`${BASE_URL}/pelanggan?${query}`);
   const data = await res.json();
 
   // TABEL TRANSAKSI PER CUSTOMER
@@ -1797,7 +1803,7 @@ async function loadPelanggan() {
 
     try {
       const queryCustomer = buildQueryWithExtra({ customer_key: customerKey });
-      const res = await fetch(`http://localhost:8000/pelanggan?${queryCustomer}`);
+      const res = await fetch(`${BASE_URL}/pelanggan?${queryCustomer}`);
       const data2 = await res.json();
 
       const trend = data2.trend_customer_loyal || [];
@@ -1981,7 +1987,7 @@ async function loadPelanggan() {
     if (!pekerjaan) return;
 
     try {
-      const res = await fetch(`http://localhost:8000/pelanggan?pekerjaan=${encodeURIComponent(pekerjaan)}&${query}`);
+      const res = await fetch(`${BASE_URL}/pelanggan?pekerjaan=${encodeURIComponent(pekerjaan)}&${query}`);
       const data3 = await res.json();
 
       const trend = data3.trend_pekerjaan || [];
@@ -2131,7 +2137,7 @@ content.innerHTML = `
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
 
-  const res = await fetch(`http://localhost:8000/wilayah?top=${filter}&${query}`);
+  const res = await fetch(`${BASE_URL}/wilayah?top=${filter}&${query}`);
   const data = await res.json();
 
   /* =====================================================
@@ -2479,7 +2485,7 @@ function loadUnduhData() {
       return `${day}/${m}/${y}`;
     };
 
-    const url = `http://localhost:8000/unduh-data?` +
+      const url = `${BASE_URL}/unduh-data?` +
       `jenis_data=${jenis}` +
       `&tanggal_awal=${format(awal)}` +
       `&tanggal_akhir=${format(akhir)}`;
