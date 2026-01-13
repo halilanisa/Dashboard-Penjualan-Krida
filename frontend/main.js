@@ -591,58 +591,114 @@ function renderCharts(data) {
       updateWiraniagaChart(e.target.value);
   };
 
-  const pieLabels = data.pie_penjualan.map(d => d.penjualan);
-  const pieValues = data.pie_penjualan.map(d => d.jumlah);
+let chartPie = null; // global
+let chartStatus = null;
+let chartTopKecamatan = null;
+let chartTopKendaraan = null;
 
-  if (chartPie) chartPie.destroy();
+async function renderPieChartModern(filters = {}) {
+    try {
+        // Ubah filters jadi query string
+        const query = new URLSearchParams(filters).toString();
+        const url = `${BASE_URL}/overview?${query}`;
+        
+        const data = await fetch(url).then(res => res.json());
 
-  const ctxPie = piePenjualan.getContext("2d");
+        if (!data.pie_penjualan) return console.warn("pie_penjualan kosong");
 
-  // Pakai 2 warna solid
-  const PIE_COLORS = ["#E97700", "#FFB703"];
-  const pieColors = pieValues.map((_, i) => PIE_COLORS[i % PIE_COLORS.length]);
+        // Ambil semua label unik dari bulan ini & bulan lalu
+        const labels = [
+            ...new Set([
+                ...data.pie_penjualan.bulan_ini.map(d => d.penjualan),
+                ...data.pie_penjualan.bulan_lalu.map(d => d.penjualan)
+            ])
+        ];
 
-  chartPie = new Chart(ctxPie, {
-      type: "bar",
-      data: {
-          labels: pieLabels,
-          datasets: [{
-              label: "Jumlah Penjualan",
-              data: pieValues,
-              backgroundColor: pieColors, // pakai warna solid
-              borderRadius: 10
-          }]
-      },
-      options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-              legend: { display: false },
-              tooltip: {
-                  enabled: true,
-                  mode: 'index',
-                  intersect: false,
-                  callbacks: {
-                      label: context => `Jumlah: ${context.parsed.y}`
-                  }
-              },
-              datalabels: {
-                  anchor: 'end',
-                  align: 'end',
-                  offset: 6,
-                  color: '#333',
-                  font: { weight: 'bold', size: 12 },
-                  formatter: value => value.toLocaleString()
-              }
-          },
-          scales: {
-              x: { ticks: { font: { size: 11 } } },
-              y: { beginAtZero: true, grid: { display: false }, ticks: { font: { size: 11 } } }
-          },
-          animation: { duration: 1500, easing: 'easeOutQuart' }
-      },
-      plugins: [ChartDataLabels]
-  });
+        // Ambil data masing-masing bulan
+        const valuesIni = labels.map(l => {
+            const item = data.pie_penjualan.bulan_ini.find(d => d.penjualan === l);
+            return item ? item.jumlah : 0;
+        });
+
+        const valuesLalu = labels.map(l => {
+            const item = data.pie_penjualan.bulan_lalu.find(d => d.penjualan === l);
+            return item ? item.jumlah : 0;
+        });
+
+        // Ambil canvas
+        const canvas = document.getElementById("piePenjualan");
+        if (!canvas) return console.error("Canvas piePenjualan tidak ditemukan");
+        const ctxPie = canvas.getContext("2d");
+
+        // Hapus chart lama jika ada
+        if (chartPie) chartPie.destroy();
+
+        // Warna modern untuk tiap dataset
+        const COLORS = ["#E97700", "#FFB703"]; // Bulan Ini, Bulan Lalu
+
+        chartPie = new Chart(ctxPie, {
+            type: "bar",
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: "Bulan Ini",
+                        data: valuesIni,
+                        backgroundColor: COLORS[0],
+                        borderRadius: 10
+                    },
+                    {
+                        label: "Bulan Lalu",
+                        data: valuesLalu,
+                        backgroundColor: COLORS[1],
+                        borderRadius: 10
+                    }
+                ]
+            },
+            options: {
+                indexAxis: "x",
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        enabled: true,
+                        mode: "index",
+                        intersect: false,
+                        callbacks: {
+                            label: context => `${context.dataset.label}: ${context.parsed.y}`
+                        }
+                    },
+                    datalabels: {
+                        anchor: "end",
+                        align: "end",
+                        offset: 6,
+                        color: "#333",
+                        font: { weight: "bold", size: 12 },
+                        formatter: value => value.toLocaleString()
+                    }
+                },
+                scales: {
+                    x: { ticks: { font: { size: 11 } } },
+                    y: { beginAtZero: true, grid: { display: false }, ticks: { font: { size: 11 } } }
+                },
+                animation: { duration: 1500, easing: "easeOutQuart" }
+            },
+            plugins: [ChartDataLabels]
+        });
+    } catch (err) {
+        console.error("Error renderPieChartModern:", err);
+    }
+}
+
+// Contoh pemanggilan pakai global filters
+const filters = getGlobalFilters(); 
+renderPieChartModern(filters);
+
+// Jika ingin reload saat filter berubah
+document.querySelectorAll(".filter-input").forEach(el =>
+    el.addEventListener("change", () => renderPieChartModern(getGlobalFilters()))
+);
 
   const statusLabels = data.status_sales.map(d => d.salesman_status);
   const statusValues = data.status_sales.map(d => d.jumlah);
