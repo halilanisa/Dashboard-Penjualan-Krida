@@ -289,16 +289,47 @@ def overview(
     )
 
     # BULAN
-    bulan_ini = df["bulan"].max()
-    bulan_lalu = bulan_ini - 1
+    bulan_ini = df["bulan"].max()  # bulan terakhir dari filter
+    tahun_ini = bulan_ini.year
 
+    # Tentukan bulan lalu
+    if bulan_ini.month == 1:
+        bulan_lalu = 12
+        tahun_lalu = tahun_ini - 1
+    else:
+        bulan_lalu = bulan_ini.month - 1
+        tahun_lalu = tahun_ini
+
+    # Data bulan ini dari df hasil filter
     df_ini = df[df["bulan"] == bulan_ini]
-    df_lalu = df[df["bulan"] == bulan_lalu]
+
+    # Ambil data bulan lalu dari DB penuh supaya tetap ada walau filter cuma 1 bulan
+    df_all = pd.read_sql("""
+        SELECT
+            tgl_invoice,
+            nomor_invoice,
+            type_kendaraan,
+            kecamatan,
+            penjualan,
+            wiraniaga,
+            salesman_status,
+            supervisor
+        FROM penjualan
+        WHERE tgl_invoice IS NOT NULL
+    """, engine)
+
+    df_all["tgl_invoice"] = pd.to_datetime(df_all["tgl_invoice"])
+    df_all["bulan"] = df_all["tgl_invoice"].dt.to_period("M")
+
+    df_lalu = df_all[
+        (df_all["tgl_invoice"].dt.month == bulan_lalu) &
+        (df_all["tgl_invoice"].dt.year == tahun_lalu)
+    ]
 
     # TOTAL TRANSAKSI
     total_all = df["nomor_invoice"].nunique()
     total_ini = df_ini["nomor_invoice"].nunique()
-    total_lalu = df_lalu["nomor_invoice"].nunique()
+    total_lalu = df_lalu["nomor_invoice"].nunique() if not df_lalu.empty else 0
 
     selisih = total_ini - total_lalu
     if selisih > 0:
@@ -307,60 +338,103 @@ def overview(
         status = "turun"
     else:
         status = "tetap"
+    # PREDIKSI BULAN INI (DENGAN FILTER GLOBAL & SESUAI FILTER TANGGAL)
 
-    # PREDIKSI BULAN INI 
-    today = pd.Timestamp.now()
-    first_of_month = today.replace(day=1).strftime('%Y-%m-%d')
-    
-    df_prediksi = pd.read_sql(f"""
-        SELECT tgl_invoice, nomor_invoice 
-        FROM penjualan 
-        WHERE tgl_invoice >= '{first_of_month}'
-    """, engine)
-
-    if df_prediksi.empty:
-        # Jika benar-benar tidak ada transaksi sama sekali di DB bulan ini
+    # Ambil bulan terakhir dari data hasil filter
+    if df.empty:
         prediksi_bulan_ini = 0
+        real_so_far = 0
+        hk_berjalan = 0
+        total_hk_sebulan = 0
     else:
+        bulan_filter = df["bulan"].max()  # periode terakhir dari data filter
+        tahun_filter = bulan_filter.year
+        bulan_filter_month = bulan_filter.month
+
+        # Filter semua data DB untuk bulan yang sama
+        df_prediksi = pd.read_sql(f"""
+            SELECT tgl_invoice, nomor_invoice, penjualan, wiraniaga, salesman_status, supervisor
+            FROM penjualan
+            WHERE EXTRACT(YEAR FROM tgl_invoice) = {tahun_filter}
+            AND EXTRACT(MONTH FROM tgl_invoice) = {bulan_filter_month}
+        """, engine)
+
         df_prediksi["tgl_invoice"] = pd.to_datetime(df_prediksi["tgl_invoice"])
-        
-        # Realisasi saat ini
-        real_so_far = df_prediksi["nomor_invoice"].nunique()
-        
-        # Tanggal terakhir yang ada datanya
-        last_date_data = df_prediksi["tgl_invoice"].max()
-        
-        # Hitung Hari Kerja (Senin-Sabtu)
-        first_day = last_date_data.replace(day=1)
-        last_day_month = (pd.Timestamp(first_day) + pd.offsets.MonthEnd(0))
-        
-        # Total hari kerja (Senin-Sabtu) sebulan penuh
-        month_range = pd.date_range(first_day, last_day_month)
-        total_hk_sebulan = sum(1 for d in month_range if d.weekday() < 6)
-        
-        # Hari kerja yang sudah dilalui
-        passed_range = pd.date_range(first_day, last_date_data)
-        hk_berjalan = sum(1 for d in passed_range if d.weekday() < 6)
-        
-        # Hitung Prediksi
-        pembagi = max(hk_berjalan, 1)
-        rata_rata = real_so_far / pembagi
-        prediksi_bulan_ini = int(rata_rata * total_hk_sebulan)
 
-    # PREDIKSI BULAN DEPAN
-    today = pd.Timestamp.now().normalize()
+        # Terapkan filter global
+        df_prediksi = apply_global_filter(
+            df_prediksi,
+            penjualan,
+            wiraniaga,
+            salesman_status,
+            supervisor
+        )
 
-    bulan_depan_dt = today + pd.offsets.MonthBegin(1)
-    bulan_depan_month = bulan_depan_dt.month
-    tahun_terakhir = df["tgl_invoice"].dt.year.max()
-    
-    # Ambil semua tahun sebelumnya
-    df_bulan_sebelumnya = df[df["tgl_invoice"].dt.month == bulan_depan_month]
-    if not df_bulan_sebelumnya.empty:
-        rata_bulan_depan = df_bulan_sebelumnya.groupby(df_bulan_sebelumnya["tgl_invoice"].dt.year)["nomor_invoice"].nunique().mean()
+        if df_prediksi.empty:
+            prediksi_bulan_ini = 0
+            real_so_far = 0
+            hk_berjalan = 0
+            total_hk_sebulan = 0
+        else:
+            # Realisasi transaksi saat ini (filtered)
+            real_so_far = df_prediksi["nomor_invoice"].nunique()
+
+            # Tanggal terakhir yang ada datanya
+            last_date_data = df_prediksi["tgl_invoice"].max()
+
+            # Hitung Hari Kerja (Senin-Sabtu)
+            first_day = last_date_data.replace(day=1)
+            last_day_month = first_day + pd.offsets.MonthEnd(0)
+
+            # Total hari kerja sebulan penuh
+            month_range = pd.date_range(first_day, last_day_month)
+            total_hk_sebulan = sum(1 for d in month_range if d.weekday() < 6)
+
+            # Hari kerja yang sudah berlalu sampai tanggal terakhir data
+            passed_range = pd.date_range(first_day, last_date_data)
+            hk_berjalan = sum(1 for d in passed_range if d.weekday() < 6)
+
+            # Hitung prediksi bulan ini
+            pembagi = max(hk_berjalan, 1)
+            rata_rata = real_so_far / pembagi
+            prediksi_bulan_ini = int(rata_rata * total_hk_sebulan)
+
+    # Debug
+    print(f"DEBUG PREDIKSI -> Bulan Filter: {bulan_filter}, Real: {real_so_far}, HK Berjalan: {hk_berjalan}, Total HK: {total_hk_sebulan}, Prediksi: {prediksi_bulan_ini}")
+
+    # PREDIKSI BULAN DEPAN BERDASARKAN FILTER
+    # Ambil bulan terakhir dari data filter
+    bulan_terakhir_filter = df["bulan"].max()
+    tahun_terakhir_filter = bulan_terakhir_filter.year
+    bulan_terakhir = bulan_terakhir_filter.month
+
+    # Tentukan bulan depan
+    if bulan_terakhir == 12:
+        bulan_depan_month = 1
+        tahun_depan = tahun_terakhir_filter + 1
+    else:
+        bulan_depan_month = bulan_terakhir + 1
+        tahun_depan = tahun_terakhir_filter
+
+    # Ambil semua data bulan depan dari DB penuh supaya tetap ada walau filter cuma 1 bulan
+    df_all = pd.read_sql("""
+        SELECT tgl_invoice, nomor_invoice
+        FROM penjualan
+        WHERE tgl_invoice IS NOT NULL
+    """, engine)
+    df_all["tgl_invoice"] = pd.to_datetime(df_all["tgl_invoice"])
+
+    # Filter data bulan depan dari DB penuh
+    df_bulan_depan = df_all[df_all["tgl_invoice"].dt.month == bulan_depan_month]
+
+    if not df_bulan_depan.empty:
+        # Ambil hanya tahun <= tahun_depan untuk menghitung rata-rata per tahun
+        df_bulan_depan = df_bulan_depan[df_bulan_depan["tgl_invoice"].dt.year <= tahun_depan]
+        rata_bulan_depan = df_bulan_depan.groupby(df_bulan_depan["tgl_invoice"].dt.year)["nomor_invoice"].nunique().mean()
         prediksi_bulan_depan = int(rata_bulan_depan)
     else:
         prediksi_bulan_depan = 0
+
 
     # TREND 
     if start_date and end_date:
@@ -390,8 +464,65 @@ def overview(
         trend_harian.rename(columns={"bulan_str": "tanggal"}, inplace=True)
 
     # PIE & STATUS
-    pie_penjualan = (
-        df
+    # PIE PENJUALAN FINAL
+    # -------------------
+
+    # Tentukan bulan terakhir dari data filter
+    bulan_ini = df["bulan"].max()
+    tahun_ini = bulan_ini.year
+
+    # Tentukan bulan lalu
+    if bulan_ini.month == 1:
+        bulan_lalu = 12
+        tahun_lalu = tahun_ini - 1
+    else:
+        bulan_lalu = bulan_ini.month - 1
+        tahun_lalu = tahun_ini
+
+    # Data bulan ini sudah dari df yang sudah difilter
+    df_ini = df[df["bulan"] == bulan_ini]
+
+    # Ambil semua data bulan lalu dari DB penuh supaya tetap ada walau filter cuma 1 bulan
+    df_all = pd.read_sql("""
+        SELECT
+            tgl_invoice,
+            nomor_invoice,
+            type_kendaraan,
+            kecamatan,
+            penjualan,
+            wiraniaga,
+            salesman_status,
+            supervisor
+        FROM penjualan
+        WHERE tgl_invoice IS NOT NULL
+    """, engine)
+    df_all["tgl_invoice"] = pd.to_datetime(df_all["tgl_invoice"])
+    df_all["bulan"] = df_all["tgl_invoice"].dt.to_period("M")
+
+    df_lalu = df_all[
+        (df_all["tgl_invoice"].dt.month == bulan_lalu) &
+        (df_all["tgl_invoice"].dt.year == tahun_lalu)
+    ]
+
+    # APPLY GLOBAL FILTER untuk bulan lalu supaya konsisten
+    df_lalu = apply_global_filter(
+        df_lalu,
+        penjualan,
+        wiraniaga,
+        salesman_status,
+        supervisor
+    )
+
+    # Hitung jumlah per penjualan
+    pie_penjualan_ini = (
+        df_ini
+        .groupby("penjualan")["nomor_invoice"]
+        .nunique()
+        .reset_index(name="jumlah")
+    )
+
+    pie_penjualan_lalu = (
+        df_lalu
         .groupby("penjualan")["nomor_invoice"]
         .nunique()
         .reset_index(name="jumlah")
@@ -521,7 +652,10 @@ def overview(
         },
 
         "trend_harian": trend_harian.to_dict("records"),
-        "pie_penjualan": pie_penjualan.to_dict("records"),
+        "pie_penjualan": {
+            "bulan_ini": pie_penjualan_ini.to_dict("records"),
+            "bulan_lalu": pie_penjualan_lalu.to_dict("records")
+        },
         "status_sales": status_sales.to_dict("records"),
 
         "penjualan_wiraniaga": penjualan_wiraniaga.to_dict("records"),
