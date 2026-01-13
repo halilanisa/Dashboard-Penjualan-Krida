@@ -289,16 +289,31 @@ def overview(
     )
 
     # BULAN
-    bulan_ini = df["bulan"].max()
-    bulan_lalu = bulan_ini - 1
+    bulan_ini = df["bulan"].max()           # bulan terakhir dari data filter
+    bulan_lalu = bulan_ini - 1              # bulan sebelumnya (Period otomatis lintas tahun)
 
+    # Data bulan ini dari df hasil filter
     df_ini = df[df["bulan"] == bulan_ini]
-    df_lalu = df[df["bulan"] == bulan_lalu]
 
+    # Ambil data bulan lalu dari DB penuh supaya tetap ada walau filter cuma 1 bulan
+    df_all = pd.read_sql("""
+        SELECT
+            tgl_invoice,
+            nomor_invoice
+        FROM penjualan
+        WHERE tgl_invoice IS NOT NULL
+    """, engine)
+
+    df_all["tgl_invoice"] = pd.to_datetime(df_all["tgl_invoice"])
+    df_all["bulan"] = df_all["tgl_invoice"].dt.to_period("M")
+    df_lalu = df_all[df_all["bulan"] == bulan_lalu]
+
+    # =========================
     # TOTAL TRANSAKSI
+    # =========================
     total_all = df["nomor_invoice"].nunique()
     total_ini = df_ini["nomor_invoice"].nunique()
-    total_lalu = df_lalu["nomor_invoice"].nunique()
+    total_lalu = df_lalu["nomor_invoice"].nunique() if not df_lalu.empty else 0
 
     selisih = total_ini - total_lalu
     if selisih > 0:
@@ -350,14 +365,20 @@ def overview(
     # PREDIKSI BULAN DEPAN
     today = pd.Timestamp.now().normalize()
 
+    # Tentukan bulan depan
     bulan_depan_dt = today + pd.offsets.MonthBegin(1)
     bulan_depan_month = bulan_depan_dt.month
+    # Gunakan data filter terakhir untuk tahun
     tahun_terakhir = df["tgl_invoice"].dt.year.max()
-    
-    # Ambil semua tahun sebelumnya
+
+    # Ambil semua data bulan depan dari df hasil filter
     df_bulan_sebelumnya = df[df["tgl_invoice"].dt.month == bulan_depan_month]
+
     if not df_bulan_sebelumnya.empty:
-        rata_bulan_depan = df_bulan_sebelumnya.groupby(df_bulan_sebelumnya["tgl_invoice"].dt.year)["nomor_invoice"].nunique().mean()
+        # Rata-rata transaksi unik per tahun di bulan depan (sesuai filter)
+        rata_bulan_depan = df_bulan_sebelumnya.groupby(
+            df_bulan_sebelumnya["tgl_invoice"].dt.year
+        )["nomor_invoice"].nunique().mean()
         prediksi_bulan_depan = int(rata_bulan_depan)
     else:
         prediksi_bulan_depan = 0
