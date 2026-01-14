@@ -98,9 +98,8 @@ function buildQuery(params) {
 const BASE_URL = "https://dashboard-penjualan-krida-production.up.railway.app";
 
 async function loadFilters() {
-  const res = await fetch(`${BASE_URL}/filters`);
-  const data = await res.json();
-  console.log(data); // cek data yang diterima
+  const res = await fetch(`${BASE_URL}/filters`)
+  const data = await res.json()
 
   fillSelect("filter-penjualan", data.penjualan)
   fillSelect("filter-wiraniaga", data.wiraniaga)
@@ -160,7 +159,6 @@ function updatePage(page) {
 /* =====================
    REFRESH
 ===================== */
-
 async function refreshData() {
   try {
     const res = await fetch(`${BASE_URL}/refresh`, {
@@ -168,13 +166,11 @@ async function refreshData() {
     });
 
     const data = await res.json();
-    alert(data.message);  // menampilkan pesan dari backend
+    alert(data.message);
   } catch (err) {
-    alert("Gagal refresh data"); // error handling
-    console.error(err); // optional: tampilkan error di console
+    alert("Gagal refresh data");
   }
 }
-
 
 /* =====================
    PAGES
@@ -601,7 +597,6 @@ async function renderPieChartModern(filters = {}) {
         // Ubah filters jadi query string
         const query = new URLSearchParams(filters).toString();
         const url = `${BASE_URL}/overview?${query}`;
-        
         const data = await fetch(url).then(res => res.json());
 
         if (!data.pie_penjualan) return console.warn("pie_penjualan kosong");
@@ -991,9 +986,8 @@ async function loadTrend() {
   async function renderCharts(topOption = "Top 5") {
     const filters = getGlobalFilters();
     const query = buildQuery(filters);
-
-  const res = await fetch(`${BASE_URL}/trend?top_n=${topOption}&${query}`);
-  const data = await res.json();
+    const res = await fetch(`${BASE_URL}/trend?top_n=${topOption}&${query}`);
+    const data = await res.json();
 
     if (chartTotal) chartTotal.destroy();
     if (chartMetode) chartMetode.destroy();
@@ -1245,6 +1239,7 @@ async function loadPenjualan(filter = "top5") {
   // FETCH DATA PENJUALAN
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
+
   const res = await fetch(`${BASE_URL}/penjualan?top=${filter}&${query}`);
   const data = await res.json();
 
@@ -2541,7 +2536,7 @@ function loadUnduhData() {
       return `${day}/${m}/${y}`;
     };
 
-      const url = `${BASE_URL}/unduh-data?` +
+    const url = `${BASE_URL}/unduh-data?` +
       `jenis_data=${jenis}` +
       `&tanggal_awal=${format(awal)}` +
       `&tanggal_akhir=${format(akhir)}`;
