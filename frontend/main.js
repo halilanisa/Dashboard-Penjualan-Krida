@@ -2564,3 +2564,14 @@ function capitalize(text) {
 document.addEventListener("DOMContentLoaded", () => {
   loadPage("home");
 });
+
+/* =====================
+   SIDEBAR TOGGLE
+===================== */
+function toggleSidebar() {
+  document.querySelector(".sidebar").classList.toggle("collapsed");
+  document.querySelector(".main").classList.toggle("expanded");
+
+  // Paksa Chart.js resize ulang
+  window.dispatchEvent(new Event("resize"));
+}

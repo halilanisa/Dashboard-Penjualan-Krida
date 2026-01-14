@@ -7,13 +7,12 @@
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  
-  <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tinycolor2@1.4.2/dist/tinycolor-min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 
+  <!-- Icons -->
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
 
   <!-- Style -->
   <link rel="stylesheet" href="style.css">
@@ -22,14 +21,21 @@
 
 <div class="app">
 
-
   <!-- SIDEBAR -->
   <aside class="sidebar">
+
+    <!-- TOGGLE -->
+    <button class="toggle-sidebar" onclick="toggleSidebar()">
+      <i class='bx bx-menu'></i>
+    </button>
+
+    <!-- LOGO -->
     <h2 class="logo"></h2>
 
-    <!-- REFRESH DATA -->
+    <!-- REFRESH -->
     <button class="refresh-btn" onclick="refreshData()">
-      <i class='bx bx-refresh'></i> Muat Ulang Data
+      <i class='bx bx-refresh'></i>
+      <span>Muat Ulang Data</span>
     </button>
 
     <hr class="sidebar-divider">
@@ -37,16 +43,55 @@
     <!-- NAVIGATION -->
     <nav>
       <ul>
-      <li class="nav-item active" data-page="home"><i class='bx bx-home-alt'></i> Beranda</li>
-      <li class="nav-item" data-page="overview"><i class='bx bx-file'></i> Ringkasan</li>
-      <li class="nav-item" data-page="performa-sales"><i class='bx bx-line-chart'></i> Performa Sales</li>
-      <li class="nav-item" data-page="trend"><i class='bx bx-trending-up'></i> Tren</li>
-      <li class="nav-item" data-page="penjualan"><i class='bx bx-receipt'></i> Penjualan</li>
-      <li class="nav-item" data-page="produk"><i class='bx bx-package'></i> Produk</li>
-      <li class="nav-item" data-page="pekerja"><i class='bx bx-group'></i> Pekerja</li>
-      <li class="nav-item" data-page="pelanggan"><i class='bx bx-user'></i> Customer RO</li>
-      <li class="nav-item" data-page="wilayah"><i class='bx bx-map'></i> Wilayah</li>
-      <li class="nav-item" data-page="unduhdata"><i class='bx bx-download'></i> Unduh Data</li>
+        <li class="nav-item active" data-page="home">
+          <i class='bx bx-home-alt'></i>
+          <span>Beranda</span>
+        </li>
+
+        <li class="nav-item" data-page="overview">
+          <i class='bx bx-file'></i>
+          <span>Ringkasan</span>
+        </li>
+
+        <li class="nav-item" data-page="performa-sales">
+          <i class='bx bx-line-chart'></i>
+          <span>Performa Sales</span>
+        </li>
+
+        <li class="nav-item" data-page="trend">
+          <i class='bx bx-trending-up'></i>
+          <span>Tren</span>
+        </li>
+
+        <li class="nav-item" data-page="penjualan">
+          <i class='bx bx-receipt'></i>
+          <span>Penjualan</span>
+        </li>
+
+        <li class="nav-item" data-page="produk">
+          <i class='bx bx-package'></i>
+          <span>Produk</span>
+        </li>
+
+        <li class="nav-item" data-page="pekerja">
+          <i class='bx bx-group'></i>
+          <span>Pekerja</span>
+        </li>
+
+        <li class="nav-item" data-page="pelanggan">
+          <i class='bx bx-user'></i>
+          <span>Customer RO</span>
+        </li>
+
+        <li class="nav-item" data-page="wilayah">
+          <i class='bx bx-map'></i>
+          <span>Wilayah</span>
+        </li>
+
+        <li class="nav-item" data-page="unduhdata">
+          <i class='bx bx-download'></i>
+          <span>Unduh Data</span>
+        </li>
       </ul>
     </nav>
   </aside>
@@ -54,15 +99,11 @@
   <!-- MAIN CONTENT -->
   <main class="main">
 
-    <!-- PAGE HEADER -->
+    <!-- HEADER -->
     <div class="page-header">
-
       <div id="breadcrumb" class="breadcrumb"></div>
       <h1 id="page-title"></h1>
-
-      <!-- FILTER AKAN MASUK KE SINI -->
       <div id="filter-container"></div>
-
     </div>
 
     <!-- CONTENT -->
@@ -75,53 +116,51 @@
 
   </main>
 
-
 </div>
 
-  <!-- FILTER TEMPLATE -->
-  <template id="filter-template">
-    <div class="filter-bar">
+<!-- FILTER TEMPLATE -->
+<template id="filter-template">
+  <div class="filter-bar">
 
-      <div class="filter-group">
-        <label>Tanggal Invoice</label>
-        <div class="date-range">
-          <input type="date" id="startDate" class="global-filter">
-          <span>–</span>
-          <input type="date" id="endDate" class="global-filter">
-        </div>
+    <div class="filter-group">
+      <label>Tanggal Invoice</label>
+      <div class="date-range">
+        <input type="date" id="startDate" class="global-filter">
+        <span>–</span>
+        <input type="date" id="endDate" class="global-filter">
       </div>
-
-      <div class="filter-group">
-        <label>Penjualan</label>
-        <select id="filter-penjualan" class="global-filter">
-          <option value="">Semua</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label>Wiraniaga</label>
-        <select id="filter-wiraniaga" class="global-filter">
-          <option value="">Semua</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label>Salesman Status</label>
-        <select id="filter-status" class="global-filter">
-          <option value="">Semua</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label>Supervisor</label>
-        <select id="filter-supervisor" class="global-filter">
-          <option value="">Semua</option>
-        </select>
-      </div>
-
     </div>
-  </template>
 
+    <div class="filter-group">
+      <label>Penjualan</label>
+      <select id="filter-penjualan" class="global-filter">
+        <option value="">Semua</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>Wiraniaga</label>
+      <select id="filter-wiraniaga" class="global-filter">
+        <option value="">Semua</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>Salesman Status</label>
+      <select id="filter-status" class="global-filter">
+        <option value="">Semua</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>Supervisor</label>
+      <select id="filter-supervisor" class="global-filter">
+        <option value="">Semua</option>
+      </select>
+    </div>
+
+  </div>
+</template>
 
 <!-- MAIN SCRIPT -->
 <script src="main.js"></script>

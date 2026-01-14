@@ -130,15 +130,19 @@ body {
 
 .sidebar nav ul li,
 .refresh-btn {
+  background: transparent;
+  border: none;
+  width: 100%;
   padding: 12px 14px;
   margin-bottom: 6px;
   border-radius: 8px;
   cursor: pointer;
-  color: #444;
+
   display: flex;
   align-items: center;
   gap: 12px;
-  transition: 0.2s;
+
+  color: #444;
 }
 
 .sidebar nav ul li i,
@@ -153,7 +157,7 @@ body {
 }
 
 .sidebar nav ul li.active {
-  background: #fdecec;
+  background: transparent;
   color: #c73333;
   font-weight: 600;
 }
@@ -575,4 +579,120 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 28px;
+}
+
+/* =====================
+   COLLAPSIBLE SIDEBAR
+===================== */
+
+.sidebar {
+  transition: width 0.3s ease;
+}
+
+/* Sidebar kecil */
+.sidebar.collapsed {
+  width: 70px;
+}
+
+/* Sembunyikan teks */
+.sidebar.collapsed span {
+  display: none;
+}
+
+/* Logo mengecil */
+.sidebar.collapsed .logo::before {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 20px;
+}
+
+/* Main ikut melebar */
+.main {
+  transition: margin-left 0.3s ease;
+}
+
+.main.expanded {
+  margin-left: 70px;
+}
+
+/* Tombol toggle */
+.toggle-sidebar {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  color: #444;
+}
+
+/* Tengah saat kecil */
+.sidebar.collapsed .toggle-sidebar {
+  text-align: center;
+}
+
+/* Icon default */
+.sidebar nav ul li i {
+  font-size: 20px;
+  color: #777;
+  transition: 0.3s;
+}
+
+/* Icon saat aktif */
+.sidebar nav ul li.active i {
+  color: #c73333;
+}
+
+.sidebar nav ul li.active i {
+  background: #fdecec;
+  padding: 10px;
+  border-radius: 50%;
+}
+
+.sidebar nav ul li:hover {
+  background: transparent;
+}
+
+.sidebar nav ul li:hover i {
+  color: #c73333;
+}
+
+.sidebar.collapsed nav ul li {
+  justify-content: center;
+}
+
+/* Icon refresh default */
+.refresh-btn i {
+  font-size: 20px;
+  color: #777;
+  transition: 0.3s;
+}
+
+/* Hover → icon merah */
+.refresh-btn:hover {
+  background: transparent;
+}
+
+.refresh-btn:hover i {
+  color: #c73333;
+}
+
+.refresh-btn.active {
+  background: transparent;
+  color: #c73333;
+  font-weight: 600;
+}
+
+.refresh-btn.active i {
+  color: #c73333;
+  background: #fdecec;
+  padding: 10px;
+  border-radius: 50%;
+}
+
+.sidebar.collapsed .refresh-btn {
+  justify-content: center;
+}
+
+.sidebar.collapsed .refresh-btn span {
+  display: none;
 }
