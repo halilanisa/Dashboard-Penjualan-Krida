@@ -696,3 +696,16 @@ canvas {
 .sidebar.collapsed .refresh-btn span {
   display: none;
 }
+
+.sidebar {
+  z-index: 9999;
+}
+
+.main {
+  position: relative;
+  z-index: 1;
+}
+
+canvas {
+  pointer-events: none;
+}
