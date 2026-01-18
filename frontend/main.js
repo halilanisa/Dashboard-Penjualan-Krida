@@ -346,7 +346,7 @@ let chartTransaksiSales = null;
 // TRANSAKSI SALES CHART
 function renderTransaksiSalesChart(data) {
   const ctx = document.getElementById("chartTransaksiSales").getContext("2d");
-  const COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+  const COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#5dc3ab", "#218a71"];
 
   const labelsSource = data.transaksi_sales.labels;
   const datasetsSource = data.transaksi_sales.datasets.map((ds, i) => ({
@@ -426,95 +426,140 @@ function renderTransaksiSalesChart(data) {
 function renderCharts(data) {
   const trendCtx = document.getElementById("trendChart").getContext("2d");
 
-  const trendGradient = trendCtx.createLinearGradient(0, 0, 0, 300);
-  trendGradient.addColorStop(0, "rgba(38,113,188,0.25)");
-  trendGradient.addColorStop(1, "rgba(38,113,188,0)");
+  // ===== GRADIENT =====
+  const gradientBulanan = trendCtx.createLinearGradient(0, 0, 0, 300);
+  gradientBulanan.addColorStop(0, "rgba(199,55,51,0.25)"); // #C73333
+  gradientBulanan.addColorStop(1, "rgba(199,55,51,0)");
 
-  const trendLabels = data.trend_harian.map(d => d.tanggal);
-  const trendValues = data.trend_harian.map(d => d.jumlah);
+  const gradientMingguan = trendCtx.createLinearGradient(0, 0, 0, 300);
+  gradientMingguan.addColorStop(0, "rgba(233,119,0,0.25)"); // #E97700
+  gradientMingguan.addColorStop(1, "rgba(233,119,0,0)");
 
+  const gradientHarian = trendCtx.createLinearGradient(0, 0, 0, 300);
+  gradientHarian.addColorStop(0, "rgba(255,183,3,0.25)"); // #FFB703
+  gradientHarian.addColorStop(1, "rgba(255,183,3,0)");
+
+  // ===== SAFETY =====
+  if (!data.trend_harian || data.trend_harian.length === 0) return;
   if (chartTrend) chartTrend.destroy();
 
-  const trendHoverLine = {
-    id: "trendHoverLine",
+  // ===== MODE =====
+  const isMingguanMode = data.trend_mingguan && data.trend_mingguan.length > 0;
+
+  // ===== LABEL & DATA =====
+  const labels = data.trend_harian.map(d => d.tanggal);
+  const values = data.trend_harian.map(d => d.jumlah);
+
+  // ===== DATASETS =====
+  const datasets = [];
+
+  // ===== HARIAN / BULANAN =====
+  datasets.push({
+    label: isMingguanMode ? "Harian" : "Bulanan",
+    data: values,
+
+    borderColor: isMingguanMode ? "#FFB703" : "#C73333",
+    backgroundColor: isMingguanMode ? gradientHarian : gradientBulanan,
+
+    fill: true,
+    tension: 0.35,
+    borderWidth: 3,
+
+    pointRadius: 4,
+    pointHoverRadius: 7,
+    pointBackgroundColor: isMingguanMode ? "#FFB703" : "#C73333",
+    pointBorderColor: "#fff",
+    pointBorderWidth: 2
+  });
+
+  // ===== MINGGUAN =====
+  if (isMingguanMode) {
+    const weeklySum = [];
+    let tempSum = 0;
+
+    values.forEach((val, i) => {
+      tempSum += val;
+
+      // Setiap 7 hari ATAU hari terakhir data
+      if ((i + 1) % 7 === 0 || i === values.length - 1) {
+        weeklySum.push(tempSum);
+        tempSum = 0;
+      } else {
+        weeklySum.push(null);
+      }
+    });
+
+    datasets.push({
+      label: "Mingguan",
+      data: weeklySum,
+
+      borderColor: "#E97700",
+      backgroundColor: gradientMingguan,
+
+      fill: "-1",          // isi di atas harian
+      spanGaps: true,
+      tension: 0.35,
+      borderWidth: 3,
+
+      pointRadius: 6,
+      pointHoverRadius: 8,
+      pointBackgroundColor: "#E97700",
+      pointBorderColor: "#fff",
+      pointBorderWidth: 2
+    });
+  }
+
+  // ===== HOVER LINE =====
+  const hoverLine = {
+    id: "hoverLine",
     afterDraw(chart) {
-      const active = chart.tooltip?.getActiveElements();
-      if (!active || !active.length) return;
+      const act = chart.tooltip?.getActiveElements();
+      if (!act?.length) return;
 
       const { ctx, chartArea } = chart;
-      const x = active[0].element.x;
+      const x = act[0].element.x;
 
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(x, chartArea.top);
       ctx.lineTo(x, chartArea.bottom);
+      ctx.strokeStyle = "#CBD5E1";
       ctx.lineWidth = 1;
-      ctx.strokeStyle = "#8ECAE6";
       ctx.stroke();
       ctx.restore();
     }
   };
 
+  // ===== RENDER =====
   chartTrend = new Chart(trendCtx, {
     type: "line",
-    data: {
-      labels: trendLabels,
-      datasets: [{
-        data: trendValues,
-        borderColor: "#2671BC",
-        backgroundColor: trendGradient,
-        fill: true,
-        tension: 0.35,
-        borderWidth: 3,
-        pointRadius: 4,
-        pointHoverRadius: 7,
-        pointBackgroundColor: "#2671BC",
-        pointBorderColor: "#fff",
-        pointBorderWidth: 2
-      }]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: {
-        mode: "index",
-        intersect: false
-      },
+      interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
           backgroundColor: "#fff",
           titleColor: "#111",
           bodyColor: "#333",
-          borderColor: "#8ECAE6",
+          borderColor: "#CBD5E1",
           borderWidth: 1,
           padding: 12,
           cornerRadius: 10,
-          displayColors: false,
-          callbacks: {
-            label: c => `Jumlah: ${c.parsed.y}`
-          }
+          displayColors: false
         }
       },
       scales: {
-        x: {
-          grid: { display: false },
-          ticks: { color: "#9ca3af" }
-        },
+        x: { grid: { display: false } },
         y: {
           beginAtZero: true,
-          grid: {
-            color: "#f1f5f9",
-            drawBorder: false
-          },
-          ticks: {
-            color: "#9ca3af",
-            stepSize: 10
-          }
+          grid: { color: "#f1f5f9" }
         }
       }
     },
-    plugins: [trendHoverLine]
+    plugins: [hoverLine]
   });
 
   // PENJUALAN PER WIRANIAGA DENGAN TOP 5/10/ALL
@@ -594,160 +639,180 @@ let chartTopKendaraan = null;
 
 async function renderPieChartModern(filters = {}) {
     try {
-        // Ubah filters jadi query string
         const query = new URLSearchParams(filters).toString();
-        const url = `${BASE_URL}/overview?${query}`;
-        const data = await fetch(url).then(res => res.json());
+        const res = await fetch(`${BASE_URL}/overview?${query}`);
+        const data = await res.json();
+        if (!data.pie_penjualan) return;
 
-        if (!data.pie_penjualan) return console.warn("pie_penjualan kosong");
-
-        // Ambil semua label unik dari bulan ini & bulan lalu
-        const labels = [
+        const allMethods = [
             ...new Set([
                 ...data.pie_penjualan.bulan_ini.map(d => d.penjualan),
                 ...data.pie_penjualan.bulan_lalu.map(d => d.penjualan)
             ])
         ];
 
-        // Ambil data masing-masing bulan
-        const valuesIni = labels.map(l => {
-            const item = data.pie_penjualan.bulan_ini.find(d => d.penjualan === l);
-            return item ? item.jumlah : 0;
-        });
+        const COLORS = ["#E97700", "#FFB703", "#c73333", "#F97316"];
 
-        const valuesLalu = labels.map(l => {
-            const item = data.pie_penjualan.bulan_lalu.find(d => d.penjualan === l);
-            return item ? item.jumlah : 0;
-        });
+        const totalBulanLalu = data.pie_penjualan.bulan_lalu.reduce((sum, d) => sum + d.jumlah, 0);
+        const totalBulanIni = data.pie_penjualan.bulan_ini.reduce((sum, d) => sum + d.jumlah, 0);
 
-        // Ambil canvas
-        const canvas = document.getElementById("piePenjualan");
-        if (!canvas) return console.error("Canvas piePenjualan tidak ditemukan");
-        const ctxPie = canvas.getContext("2d");
+        // Dataset stacked, borderRadius atas saja untuk stack paling atas
+        const datasets = allMethods.map((method, i) => ({
+            label: method,
+            data: [
+                data.pie_penjualan.bulan_lalu.find(d => d.penjualan === method)?.jumlah || 0,
+                data.pie_penjualan.bulan_ini.find(d => d.penjualan === method)?.jumlah || 0
+            ],
+            backgroundColor: COLORS[i % COLORS.length],
+            borderRadius: { topLeft: i === allMethods.length - 1 ? 8 : 0, topRight: i === allMethods.length - 1 ? 8 : 0, bottomLeft: 0, bottomRight: 0 },
+            borderSkipped: false,
+            stack: "stack1"
+        }));
 
-        // Hapus chart lama jika ada
+        const ctx = document.getElementById("piePenjualan").getContext("2d");
         if (chartPie) chartPie.destroy();
 
-        // Warna modern untuk tiap dataset
-        const COLORS = ["#E97700", "#FFB703"]; // Bulan Ini, Bulan Lalu
-
-        chartPie = new Chart(ctxPie, {
+        chartPie = new Chart(ctx, {
             type: "bar",
             data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: "Bulan Ini",
-                        data: valuesIni,
-                        backgroundColor: COLORS[0],
-                        borderRadius: 10
-                    },
-                    {
-                        label: "Bulan Lalu",
-                        data: valuesLalu,
-                        backgroundColor: COLORS[1],
-                        borderRadius: 10
-                    }
-                ]
+                labels: ["Bulan Lalu", "Bulan Ini"],
+                datasets: datasets
             },
             options: {
-                indexAxis: "x",
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
-                    tooltip: {
-                        enabled: true,
-                        mode: "index",
-                        intersect: false,
-                        callbacks: {
-                            label: context => `${context.dataset.label}: ${context.parsed.y}`
-                        }
-                    },
+                    tooltip: { mode: "index", intersect: false },
                     datalabels: {
-                        anchor: "end",
-                        align: "end",
-                        offset: 6,
+                        display: true,
                         color: "#333",
                         font: { weight: "bold", size: 12 },
-                        formatter: value => value.toLocaleString()
+                        anchor: "end",
+                        align: "end",
+                        formatter: (_, context) => {
+                            // Hanya tampilkan angka di stack paling atas
+                            if (context.datasetIndex === allMethods.length - 1) {
+                                return context.dataIndex === 0 ? totalBulanLalu : totalBulanIni;
+                            }
+                            return '';
+                        }
                     }
                 },
                 scales: {
-                    x: { ticks: { font: { size: 11 } } },
-                    y: { beginAtZero: true, grid: { display: false }, ticks: { font: { size: 11 } } }
+                    x: {
+                        stacked: true,
+                        grid: { display: false }, // hilangkan garis horizontal
+                        ticks: { font: { size: 11 } }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        grid: {
+                            drawTicks: true,
+                            drawBorder: true,
+                            color: '#e5e7eb', // garis vertikal
+                            borderDash: [2, 2]
+                        },
+                        ticks: { font: { size: 11 } }
+                    }
                 },
                 animation: { duration: 1500, easing: "easeOutQuart" }
             },
             plugins: [ChartDataLabels]
         });
+
     } catch (err) {
-        console.error("Error renderPieChartModern:", err);
+        console.error(err);
     }
 }
 
-// Contoh pemanggilan pakai global filters
+async function renderStatusSalesChart(filters = {}) {
+    try {
+        const query = new URLSearchParams(filters).toString();
+        const res = await fetch(`${BASE_URL}/overview?${query}`);
+        const data = await res.json();
+        if (!data.status_sales) return;
+
+        const allStatus = [
+            ...new Set([
+                ...data.status_sales.bulan_ini.map(d => d.salesman_status),
+                ...data.status_sales.bulan_lalu.map(d => d.salesman_status)
+            ])
+        ];
+
+        const bulanIni = allStatus.map(s => data.status_sales.bulan_ini.find(d => d.salesman_status === s)?.jumlah || 0);
+        const bulanLalu = allStatus.map(s => data.status_sales.bulan_lalu.find(d => d.salesman_status === s)?.jumlah || 0);
+
+        const totalBulanLalu = bulanLalu.reduce((a,b) => a+b, 0);
+        const totalBulanIni = bulanIni.reduce((a,b) => a+b, 0);
+
+        const COLORS = ["#E97700", "#FFB703", "#c73333", "#F97316"];
+
+        const datasets = allStatus.map((s, i) => ({
+            label: s,
+            data: [bulanLalu[i], bulanIni[i]],
+            backgroundColor: COLORS[i % COLORS.length],
+            borderRadius: { topLeft: i === allStatus.length - 1 ? 8 : 0, topRight: i === allStatus.length - 1 ? 8 : 0, bottomLeft: 0, bottomRight: 0 },
+            borderSkipped: false,
+            stack: "stack1"
+        }));
+
+        const ctx = document.getElementById("statusSales").getContext("2d");
+        if (chartStatus) chartStatus.destroy();
+
+        chartStatus = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: ["Bulan Lalu", "Bulan Ini"],
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { mode: "index", intersect: false },
+                    datalabels: {
+                        display: true,
+                        color: "#333",
+                        font: { weight: "bold", size: 12 },
+                        anchor: "end",
+                        align: "end",
+                        formatter: (_, context) => {
+                            if (context.datasetIndex === allStatus.length - 1) {
+                                return context.dataIndex === 0 ? totalBulanLalu : totalBulanIni;
+                            }
+                            return '';
+                        }
+                    }
+                },
+                scales: {
+                    x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } },
+                    y: { stacked: true, beginAtZero: true, grid: { color: "#e5e7eb", borderDash: [2,2] }, ticks: { font: { size: 11 } } }
+                },
+                animation: { duration: 1500, easing: "easeOutQuart" }
+            },
+            plugins: [ChartDataLabels]
+        });
+
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+// Pemanggilan
 const filters = getGlobalFilters(); 
+renderStatusSalesChart(filters);
 renderPieChartModern(filters);
 
-// Jika ingin reload saat filter berubah
 document.querySelectorAll(".filter-input").forEach(el =>
-    el.addEventListener("change", () => renderPieChartModern(getGlobalFilters()))
+    el.addEventListener("change", () => {
+        const filters = getGlobalFilters();
+        renderPieChartModern(filters);
+        renderStatusSalesChart(filters);
+    })
 );
-
-  const statusLabels = data.status_sales.map(d => d.salesman_status);
-  const statusValues = data.status_sales.map(d => d.jumlah);
-
-  if (chartStatus) chartStatus.destroy();
-
-  const ctxStatus = statusSales.getContext("2d");
-
-  // Pakai 3 warna solid
-  const STATUS_COLORS = ["#E97700", "#FFB703", "#8ECAE6"];
-  const statusColors = statusValues.map((_, i) => STATUS_COLORS[i % STATUS_COLORS.length]);
-
-  chartStatus = new Chart(ctxStatus, {
-      type: "bar",
-      data: {
-          labels: statusLabels,
-          datasets: [{
-              label: "Jumlah Status",
-              data: statusValues,
-              backgroundColor: statusColors, // pakai warna solid
-              borderRadius: 10
-          }]
-      },
-      options: {
-          indexAxis: "x",
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-              legend: { display: false },
-              tooltip: {
-                  enabled: true,
-                  mode: 'index',
-                  intersect: false,
-                  callbacks: {
-                      label: context => `Jumlah: ${context.parsed.y}`
-                  }
-              },
-              datalabels: {
-                  anchor: 'end',
-                  align: 'end',
-                  offset: 6,
-                  color: '#333',
-                  font: { weight: 'bold', size: 12 },
-                  formatter: value => value.toLocaleString()
-              }
-          },
-          scales: {
-              x: { ticks: { font: { size: 11 } } },
-              y: { beginAtZero: true, grid: { display: false }, ticks: { font: { size: 11 } } }
-          },
-          animation: { duration: 1500, easing: 'easeOutQuart' }
-      },
-      plugins: [ChartDataLabels]
-  });
 
   // ===== Top Kecamatan =====
   const kecLabels = data.top10_kecamatan.map(d => d.kecamatan);
@@ -757,7 +822,6 @@ document.querySelectorAll(".filter-input").forEach(el =>
 
   const ctx = document.getElementById("topKecamatan").getContext("2d");
 
-  // Semua bar pakai warna solid #FFB703
   const kecColors = kecValues.map(() => "#FFB703");
 
   chartTopKecamatan = new Chart(ctx, {
@@ -803,8 +867,7 @@ document.querySelectorAll(".filter-input").forEach(el =>
 
   const ctxKendaraan = document.getElementById("topKendaraan").getContext("2d");
 
-  // Semua bar pakai warna solid #8ECAE6
-  const kenColors = kenValues.map(() => "#8ECAE6");
+  const kenColors = kenValues.map(() => "#FFB703");
 
   chartTopKendaraan = new Chart(ctxKendaraan, {
       type: "bar",
@@ -997,8 +1060,8 @@ async function loadTrend() {
     const totalCtx = document.getElementById("trendTotal").getContext("2d");
 
     const totalGradient = totalCtx.createLinearGradient(0, 0, 0, 300);
-    totalGradient.addColorStop(0, "rgba(38,113,188,0.25)");
-    totalGradient.addColorStop(1, "rgba(38,113,188,0)");
+    totalGradient.addColorStop(0, "rgba(188, 38, 38, 0.25)");
+    totalGradient.addColorStop(1, "rgba(188, 38, 38, 0)");
 
     const totalLabels = data.trend_total.map(d => d.periode);
     const totalValues = data.trend_total.map(d => d.jumlah_transaksi);
@@ -1015,7 +1078,7 @@ async function loadTrend() {
         ctx.moveTo(x, chartArea.top);
         ctx.lineTo(x, chartArea.bottom);
         ctx.lineWidth = 1;
-        ctx.strokeStyle = "#8ECAE6";
+        ctx.strokeStyle = "#C73333";
         ctx.stroke();
         ctx.restore();
       }
@@ -1028,14 +1091,14 @@ async function loadTrend() {
         datasets: [{
           label: "Jumlah",
           data: totalValues,
-          borderColor: "#2671BC",
+          borderColor: "#C73333",
           backgroundColor: totalGradient,
           fill: true,
           tension: 0.35,
           borderWidth: 3,
           pointRadius: 4,
           pointHoverRadius: 7,
-          pointBackgroundColor: "#2671BC",
+          pointBackgroundColor: "#C73333",
           pointBorderColor: "#fff",
           pointBorderWidth: 2
         }]
@@ -1115,8 +1178,8 @@ async function loadTrend() {
       ["#C73333","#D1470B"],
       ["#D1470B","#E97700"],
       ["#E97700","#FFB703"],
-      ["#FFB703","#8ECAE6"],
-      ["#8ECAE6","#2671BC"]
+      ["#FFB703","#5dc3ab"],
+      ["#5dc3ab","#218a71"]
     ];
 
     const datasetsFinco = fincoTypes.map((finco,i)=>{
@@ -1234,7 +1297,7 @@ async function loadPenjualan(filter = "top5") {
     </div>
   `;
 
-  const COLORS = ["#326199", "#4FB1A1", "#FCC055", "#EB8D50", "#DF6E5B"];
+  const COLORS = ["#218a71", "#4FB1A1", "#FCC055", "#EB8D50", "#DF6E5B"];
 
   // FETCH DATA PENJUALAN
   const filters = getGlobalFilters();
@@ -1303,7 +1366,7 @@ async function loadPenjualan(filter = "top5") {
   const ctxFinco = document.getElementById("barFinco").getContext("2d");
   const barCount = data.finco.data.length;
 
-  const FINCO_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+  const FINCO_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#5dc3ab"];
 
   // Warna solid untuk tiap Finco
   const fincoColors = data.finco.data.map((_, i) => FINCO_COLORS[i % FINCO_COLORS.length]);
@@ -1382,7 +1445,7 @@ async function loadProduk() {
   const ctxTahun = document.getElementById("barTahunRakit").getContext("2d");
   const penjualanData = data.penjualan_tahun_rakit;
 
-  const TAHUN_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+  const TAHUN_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#5dc3ab", "#218a71"];
 
   // Warna solid untuk tiap tahun
   const tahunColors = penjualanData.map((_, i) => TAHUN_COLORS[i % TAHUN_COLORS.length]);
@@ -1577,7 +1640,7 @@ async function loadPekerja() {
   const ctxSup = document.getElementById("barSupervisor").getContext("2d");
   const barCount = supLabels.length;
 
-  const SUP_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+  const SUP_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#5dc3ab", "#218a71"];
 
   // Pilih warna solid untuk tiap supervisor
   const supColors = supLabels.map((_, i) => SUP_COLORS[i % SUP_COLORS.length]);
@@ -1775,7 +1838,7 @@ async function loadPelanggan() {
   const segValues = data.segmentasi.map(d => d.jumlah_customer);
 
   // Pakai 3 warna solid
-  const SEGMENT_COLORS = ["#E97700", "#FFB703", "#8ECAE6"];
+  const SEGMENT_COLORS = ["#E97700", "#FFB703", "#5dc3ab"];
   const colors = segValues.map((_, i) => SEGMENT_COLORS[i % SEGMENT_COLORS.length]);
 
   chartPie = new Chart(ctxSegmentasi, {
@@ -1878,8 +1941,8 @@ async function loadPelanggan() {
       }
 
       const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-      gradient.addColorStop(0, "rgba(255, 183, 3, 0.35)");
-      gradient.addColorStop(1, "rgba(142, 202, 230, 0)");
+      gradient.addColorStop(0, "rgba(255, 3, 3, 0.35)");
+      gradient.addColorStop(1, "rgba(230, 142, 142, 0)");
 
       const hoverLine = {
         id: "hoverLine",
@@ -1893,7 +1956,7 @@ async function loadPelanggan() {
           ctx.moveTo(x, chartArea.top);
           ctx.lineTo(x, chartArea.bottom);
           ctx.lineWidth = 1;
-          ctx.strokeStyle = "#FFB703";
+          ctx.strokeStyle = "#C73333";
           ctx.stroke();
           ctx.restore();
         }
@@ -1907,14 +1970,14 @@ async function loadPelanggan() {
           datasets: [{
             label: "Jumlah",
             data: trend.map(d => d.jumlah_transaksi),
-            borderColor: "#8ECAE6",
+            borderColor: "#C73333",
             backgroundColor: gradient,
             fill: "origin",
             tension: 0.35,
             borderWidth: 3,
             pointRadius: 4,
             pointHoverRadius: 7,
-            pointBackgroundColor: "#8ECAE6",
+            pointBackgroundColor: "#C73333",
             pointBorderColor: "#fff",
             pointBorderWidth: 2
           }]
@@ -1932,7 +1995,7 @@ async function loadPelanggan() {
               backgroundColor: "#fff",
               titleColor: "#111",
               bodyColor: "#333",
-              borderColor: "#8ECAE6",
+              borderColor: "#C73333",
               borderWidth: 1,
               padding: 12,
               cornerRadius: 10,
@@ -1965,7 +2028,7 @@ async function loadPelanggan() {
   const ctxBar = document.getElementById("barPekerjaan").getContext("2d");
   const pekerjaanData = data.distribusi_pekerjaan;
 
-  const PEKERJA_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+  const PEKERJA_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#5dc3ab", "#218a71"];
 
   const barColors = pekerjaanData.map((_, i) => PEKERJA_COLORS[i % PEKERJA_COLORS.length]);
 
@@ -2058,8 +2121,8 @@ async function loadPelanggan() {
       }
 
       const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-      gradient.addColorStop(0, "rgba(142, 202, 230, 0.35)");
-      gradient.addColorStop(1, "rgba(38, 113, 188, 0)");
+      gradient.addColorStop(0, "rgba(230, 142, 142, 0.35)");
+      gradient.addColorStop(1, "rgba(188, 38, 38, 0)");
 
       const hoverLine = {
         id: "hoverLine",
@@ -2073,7 +2136,7 @@ async function loadPelanggan() {
           ctx.moveTo(x, chartArea.top);
           ctx.lineTo(x, chartArea.bottom);
           ctx.lineWidth = 1;
-          ctx.strokeStyle = "#8ECAE6";
+          ctx.strokeStyle = "#C73333";
           ctx.stroke();
           ctx.restore();
         }
@@ -2086,14 +2149,14 @@ async function loadPelanggan() {
           datasets: [{
             label: pekerjaan,
             data: trend.map(d => d.jumlah_transaksi),
-            borderColor: "#2671BC",
+            borderColor: "#C73333",
             backgroundColor: gradient,
             fill: "origin",
             tension: 0.35,
             borderWidth: 3,
             pointRadius: 4,
             pointHoverRadius: 7,
-            pointBackgroundColor: "#2671BC",
+            pointBackgroundColor: "#C73333",
             pointBorderColor: "#fff",
             pointBorderWidth: 2
           }]
@@ -2111,7 +2174,7 @@ async function loadPelanggan() {
               backgroundColor: "#fff",
               titleColor: "#111",
               bodyColor: "#333",
-              borderColor: "#8ECAE6",
+              borderColor: "#C73333",
               borderWidth: 1,
               padding: 12,
               cornerRadius: 10,
@@ -2201,7 +2264,7 @@ content.innerHTML = `
     .getElementById("barPenjualanKecamatan")
     .getContext("2d");
 
-  const GRAD_KEC_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+  const GRAD_KEC_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#5dc3ab", "#218a71"];
 
   const kecColors = penKec.map((_, i) => GRAD_KEC_COLORS[i % GRAD_KEC_COLORS.length]);
 
@@ -2378,7 +2441,7 @@ content.innerHTML = `
     .getElementById("barFincoKecamatan")
     .getContext("2d");
 
-  const FINCO_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#8ECAE6", "#2671BC"];
+  const FINCO_COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#5dc3ab", "#218a71"];
 
   const datasetFinco = fincoList.map((finco, i) => {
     const color = FINCO_COLORS[i % FINCO_COLORS.length]; // pakai warna solid

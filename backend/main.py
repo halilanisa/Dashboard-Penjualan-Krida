@@ -278,8 +278,8 @@ def overview(
     df["tgl_invoice"] = pd.to_datetime(df["tgl_invoice"])
     df["bulan"] = df["tgl_invoice"].dt.to_period("M")
 
+    # FILTER GLOBAL
     df = apply_date_filter(df, start_date, end_date)
-
     df = apply_global_filter(
         df,
         penjualan,
@@ -288,22 +288,19 @@ def overview(
         supervisor
     )
 
-    # BULAN
-    bulan_ini = df["bulan"].max()  # bulan terakhir dari filter
-    tahun_ini = bulan_ini.year
+    # RENTANG FILTER AKTUAL
+    start_filter = df["tgl_invoice"].min()
+    end_filter = df["tgl_invoice"].max()
+    delta_days = (end_filter - start_filter).days + 1
 
-    # Tentukan bulan lalu
-    if bulan_ini.month == 1:
-        bulan_lalu = 12
-        tahun_lalu = tahun_ini - 1
-    else:
-        bulan_lalu = bulan_ini.month - 1
-        tahun_lalu = tahun_ini
+    # Tentukan bulan lalu sesuai panjang filter
+    start_lalu = start_filter - pd.DateOffset(months=1)
+    end_lalu = start_lalu + pd.Timedelta(days=delta_days - 1)
 
     # Data bulan ini dari df hasil filter
-    df_ini = df[df["bulan"] == bulan_ini]
+    df_ini = df[(df["tgl_invoice"] >= start_filter) & (df["tgl_invoice"] <= end_filter)]
 
-    # Ambil data bulan lalu dari DB penuh supaya tetap ada walau filter cuma 1 bulan
+    # Ambil data bulan lalu dari DB penuh
     df_all = pd.read_sql("""
         SELECT
             tgl_invoice,
@@ -317,28 +314,40 @@ def overview(
         FROM penjualan
         WHERE tgl_invoice IS NOT NULL
     """, engine)
-
     df_all["tgl_invoice"] = pd.to_datetime(df_all["tgl_invoice"])
-    df_all["bulan"] = df_all["tgl_invoice"].dt.to_period("M")
 
+    # Filter bulan lalu proporsional
     df_lalu = df_all[
-        (df_all["tgl_invoice"].dt.month == bulan_lalu) &
-        (df_all["tgl_invoice"].dt.year == tahun_lalu)
+        (df_all["tgl_invoice"] >= start_lalu) &
+        (df_all["tgl_invoice"] <= end_lalu)
     ]
 
-    # TOTAL TRANSAKSI
-    total_all = df["nomor_invoice"].nunique()
-    total_ini = df_ini["nomor_invoice"].nunique()
-    total_lalu = df_lalu["nomor_invoice"].nunique() if not df_lalu.empty else 0
+    pakai_filter_tanggal = start_date is not None or end_date is not None
 
-    selisih = total_ini - total_lalu
-    if selisih > 0:
-        status = "naik"
-    elif selisih < 0:
-        status = "turun"
-    else:
+    # TOTAL TRANSAKSI
+    if not pakai_filter_tanggal:
+        # TANPA FILTER TANGGAL
+        total_all = df_all["nomor_invoice"].nunique()
+        total_ini = total_all
+        total_lalu = total_all
+        selisih = 0
         status = "tetap"
-    # PREDIKSI BULAN INI (DENGAN FILTER GLOBAL & SESUAI FILTER TANGGAL)
+
+    else:
+        # DENGAN FILTER TANGGAL
+        total_all = df["nomor_invoice"].nunique()
+        total_ini = df_ini["nomor_invoice"].nunique()
+        total_lalu = df_lalu["nomor_invoice"].nunique() if not df_lalu.empty else 0
+
+        selisih = total_ini - total_lalu
+        if selisih > 0:
+            status = "naik"
+        elif selisih < 0:
+            status = "turun"
+        else:
+            status = "tetap"
+
+    # PREDIKSI BULAN INI 
 
     # Ambil bulan terakhir dari data hasil filter
     if df.empty:
@@ -399,9 +408,6 @@ def overview(
             rata_rata = real_so_far / pembagi
             prediksi_bulan_ini = int(rata_rata * total_hk_sebulan)
 
-    # Debug
-    print(f"DEBUG PREDIKSI -> Bulan Filter: {bulan_filter}, Real: {real_so_far}, HK Berjalan: {hk_berjalan}, Total HK: {total_hk_sebulan}, Prediksi: {prediksi_bulan_ini}")
-
     # PREDIKSI BULAN DEPAN BERDASARKAN FILTER
     # Ambil bulan terakhir dari data filter
     bulan_terakhir_filter = df["bulan"].max()
@@ -433,19 +439,19 @@ def overview(
         rata_bulan_depan = df_bulan_depan.groupby(df_bulan_depan["tgl_invoice"].dt.year)["nomor_invoice"].nunique().mean()
         prediksi_bulan_depan = int(rata_bulan_depan)
     else:
-        prediksi_bulan_depan = 0
+            prediksi_bulan_depan = 0
 
-
-    # TREND 
+    # TREND
     if start_date and end_date:
         start_dt = pd.to_datetime(start_date)
         end_dt = pd.to_datetime(end_date)
         delta_month = (end_dt.year - start_dt.year) * 12 + (end_dt.month - start_dt.month) + 1
     else:
         delta_month = 12  # default 12 bulan
-
+        
+    trend_mingguan = pd.DataFrame(columns=["minggu", "jumlah"])
     if delta_month <= 5:
-        # Gunakan trend harian
+        # Trend harian
         trend_harian = (
             df.groupby(df["tgl_invoice"].dt.date)["nomor_invoice"]
             .nunique()
@@ -453,8 +459,19 @@ def overview(
         )
         trend_harian["tanggal"] = trend_harian["tgl_invoice"].astype(str)
         trend_harian = trend_harian[["tanggal", "jumlah"]]
+
+        # Trend mingguan: 1 titik per minggu (Senin sebagai start)
+        trend_mingguan = (
+            df.groupby(df["tgl_invoice"].dt.to_period("W-MON"))["nomor_invoice"]
+            .nunique()
+            .reset_index(name="jumlah")
+        )
+        # Ambil tanggal awal minggu
+        trend_mingguan["minggu"] = trend_mingguan["tgl_invoice"].dt.start_time.dt.date.astype(str)
+        trend_mingguan = trend_mingguan[["minggu", "jumlah"]]
+
     else:
-        # Gunakan trend bulanan
+        # Trend bulanan
         df["bulan_str"] = df["tgl_invoice"].dt.to_period("M").astype(str)
         trend_harian = (
             df.groupby("bulan_str")["nomor_invoice"]
@@ -463,26 +480,27 @@ def overview(
         )
         trend_harian.rename(columns={"bulan_str": "tanggal"}, inplace=True)
 
-    # PIE & STATUS
-    # PIE PENJUALAN FINAL
-    # -------------------
+    # PIE & STATUS 
+    label_bulan_ini = f"{start_filter.date()} s/d {end_filter.date()}"
 
-    # Tentukan bulan terakhir dari data filter
-    bulan_ini = df["bulan"].max()
-    tahun_ini = bulan_ini.year
+    # Periode "lalu" proporsional sama panjangnya dengan periode filter ini
+    delta_days = (end_filter - start_filter).days + 1
+    start_lalu = start_filter - pd.Timedelta(days=delta_days)
+    end_lalu = start_filter - pd.Timedelta(days=1)
+    label_bulan_lalu = f"{start_lalu.date()} s/d {end_lalu.date()}"
 
-    # Tentukan bulan lalu
-    if bulan_ini.month == 1:
-        bulan_lalu = 12
-        tahun_lalu = tahun_ini - 1
-    else:
-        bulan_lalu = bulan_ini.month - 1
-        tahun_lalu = tahun_ini
+    # DATA PERIODE INI
+    df_ini = df[(df["tgl_invoice"] >= start_filter) & (df["tgl_invoice"] <= end_filter)]
+    df_ini = apply_global_filter(
+        df_ini,
+        penjualan,
+        wiraniaga,
+        salesman_status,
+        supervisor
+    )
 
-    # Data bulan ini sudah dari df yang sudah difilter
-    df_ini = df[df["bulan"] == bulan_ini]
-
-    # Ambil semua data bulan lalu dari DB penuh supaya tetap ada walau filter cuma 1 bulan
+    # DATA PERIODE LALU 
+    # Ambil semua data dari DB
     df_all = pd.read_sql("""
         SELECT
             tgl_invoice,
@@ -497,14 +515,14 @@ def overview(
         WHERE tgl_invoice IS NOT NULL
     """, engine)
     df_all["tgl_invoice"] = pd.to_datetime(df_all["tgl_invoice"])
-    df_all["bulan"] = df_all["tgl_invoice"].dt.to_period("M")
 
+    # Filter periode lalu proporsional
     df_lalu = df_all[
-        (df_all["tgl_invoice"].dt.month == bulan_lalu) &
-        (df_all["tgl_invoice"].dt.year == tahun_lalu)
+        (df_all["tgl_invoice"] >= start_lalu) &
+        (df_all["tgl_invoice"] <= end_lalu)
     ]
 
-    # APPLY GLOBAL FILTER untuk bulan lalu supaya konsisten
+    # Terapkan filter global agar konsisten
     df_lalu = apply_global_filter(
         df_lalu,
         penjualan,
@@ -513,7 +531,7 @@ def overview(
         supervisor
     )
 
-    # Hitung jumlah per penjualan
+    # PIE PENJUALAN
     pie_penjualan_ini = (
         df_ini
         .groupby("penjualan")["nomor_invoice"]
@@ -528,46 +546,94 @@ def overview(
         .reset_index(name="jumlah")
     )
 
-    status_sales = (
-        df
+    # STATUS SALES
+    status_sales_ini = (
+        df_ini
         .groupby("salesman_status")["nomor_invoice"]
         .nunique()
         .reset_index(name="jumlah")
     )
 
-    # TOP BULAN INI & LALU
-    def safe_top(df, col):
-        if df.empty:
-            return {"label": "-", "jumlah": 0}
-        x = (
-            df
-            .groupby(col)["nomor_invoice"]
-            .nunique()
-            .reset_index(name="jumlah")
-            .sort_values("jumlah", ascending=False)
-            .iloc[0]
-        )
-        return {"label": x[col], "jumlah": int(x["jumlah"])}
-
-    # TOP 10
-    top_kecamatan = (
-        df
-        .groupby("kecamatan")["nomor_invoice"]
+    status_sales_lalu = (
+        df_lalu
+        .groupby("salesman_status")["nomor_invoice"]
         .nunique()
         .reset_index(name="jumlah")
-        .sort_values("jumlah", ascending=False)
-        .head(10)
     )
 
-    df_kendaraan = filter_visual(df, "type_kendaraan")
-    top_kendaraan = (
-        df_kendaraan
+    # TOP KENDARAAN & KECAMATAN
+    if (
+        start_date is None and end_date is None and
+        penjualan is None and wiraniaga is None and
+        salesman_status is None and supervisor is None
+    ):
+        df_ini_top = df_all.copy()
+        df_lalu_top = df_all.copy()
+    else:
+        df_ini_top = df_ini.copy()
+        df_lalu_top = df_lalu.copy()
+
+    agg_kendaraan = (
+        df_ini_top
         .groupby("type_kendaraan")["nomor_invoice"]
         .nunique()
         .reset_index(name="jumlah")
-        .sort_values("jumlah", ascending=False)
-        .head(10)
+        .sort_values(
+            ["jumlah", "type_kendaraan"],  
+            ascending=[False, True]
+        )
     )
+
+    agg_kecamatan = (
+        df_ini_top
+        .groupby("kecamatan")["nomor_invoice"]
+        .nunique()
+        .reset_index(name="jumlah")
+        .sort_values(
+            ["jumlah", "kecamatan"],      
+            ascending=[False, True]
+        )
+    )
+
+    def safe_top(df, col):
+        if df.empty:
+            return {"label": "-", "jumlah": 0}
+
+        x = (
+            df.groupby(col)["nomor_invoice"]
+            .nunique()
+            .reset_index(name="jumlah")
+            .sort_values(
+                ["jumlah", col],
+                ascending=[False, True]
+            )
+            .iloc[0]
+        )
+
+        return {"label": x[col], "jumlah": int(x["jumlah"])}
+
+    top_kendaraan = {
+        "bulan_ini": (
+            {"label": agg_kendaraan.iloc[0]["type_kendaraan"],
+            "jumlah": int(agg_kendaraan.iloc[0]["jumlah"])}
+            if not agg_kendaraan.empty
+            else {"label": "-", "jumlah": 0}
+        ),
+        "bulan_lalu": safe_top(df_lalu_top, "type_kendaraan")
+    }
+
+    top_kecamatan = {
+        "bulan_ini": (
+            {"label": agg_kecamatan.iloc[0]["kecamatan"],
+            "jumlah": int(agg_kecamatan.iloc[0]["jumlah"])}
+            if not agg_kecamatan.empty
+            else {"label": "-", "jumlah": 0}
+        ),
+        "bulan_lalu": safe_top(df_lalu_top, "kecamatan")
+    }
+
+    top10_kendaraan = agg_kendaraan.head(10)
+    top10_kecamatan = agg_kecamatan.head(10)
 
     # TRANSAKSI SALES - STACKED BAR
     df_sales = pd.read_sql("""
@@ -628,8 +694,8 @@ def overview(
 
     # RESPONSE
     return {
-        "bulan_ini": str(bulan_ini),
-        "bulan_lalu": str(bulan_lalu),
+        "bulan_ini": label_bulan_ini,
+        "bulan_lalu": label_bulan_lalu,
 
         "penjualan": {
             "total_all": int(total_all),
@@ -641,27 +707,24 @@ def overview(
             "prediksi_bulan_depan": prediksi_bulan_depan
         },
 
-        "top_kendaraan": {
-            "bulan_ini": safe_top(df_ini, "type_kendaraan"),
-            "bulan_lalu": safe_top(df_lalu, "type_kendaraan")
-        },
-
-        "top_kecamatan": {
-            "bulan_ini": safe_top(df_ini, "kecamatan"),
-            "bulan_lalu": safe_top(df_lalu, "kecamatan")
-        },
+        "top_kendaraan": top_kendaraan,
+        "top_kecamatan": top_kecamatan,
 
         "trend_harian": trend_harian.to_dict("records"),
+        "trend_mingguan": trend_mingguan.to_dict("records")if delta_month <= 5 else [],
         "pie_penjualan": {
             "bulan_ini": pie_penjualan_ini.to_dict("records"),
             "bulan_lalu": pie_penjualan_lalu.to_dict("records")
         },
-        "status_sales": status_sales.to_dict("records"),
+        "status_sales": {
+            "bulan_ini": status_sales_ini.to_dict(orient="records"),
+            "bulan_lalu": status_sales_lalu.to_dict(orient="records")
+        },
 
         "penjualan_wiraniaga": penjualan_wiraniaga.to_dict("records"),
 
-        "top10_kecamatan": top_kecamatan.to_dict("records"),
-        "top10_kendaraan": top_kendaraan.to_dict("records"),
+        "top10_kecamatan": top10_kecamatan.to_dict("records"),
+        "top10_kendaraan": top10_kendaraan.to_dict("records"),
 
         "transaksi_sales": {
             "labels": labels_sales,
