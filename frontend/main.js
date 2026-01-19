@@ -2348,8 +2348,9 @@ content.innerHTML = `
 
   const METODE_COLORS = ["#FFB703", "#E97700"];
 
+
   const datasetMetode = metodeList.map((metode, i) => {
-    const color = METODE_COLORS[i % METODE_COLORS.length]; // pakai warna solid
+    const color = METODE_COLORS[i % METODE_COLORS.length];
     return {
       label: metode,
       data: kecMetode.map(kec =>
@@ -2358,7 +2359,25 @@ content.innerHTML = `
           .reduce((sum, x) => sum + x.jumlah_transaksi, 0)
       ),
       backgroundColor: color,
-      borderRadius: 10
+      borderRadius: ctx => {
+        const datasets = ctx.chart.data.datasets;
+        const dataIndex = ctx.dataIndex;
+        const datasetIndex = ctx.datasetIndex;
+
+        // cek apakah bar ini paling atas di stack
+        let isTopBar = true;
+        for (let k = datasetIndex + 1; k < datasets.length; k++) {
+          if ((datasets[k].data[dataIndex] ?? 0) > 0) {
+            isTopBar = false;
+            break;
+          }
+        }
+
+        return isTopBar
+          ? 10 // border radius di atas
+          : 0; // selain top bar, tidak ada border radius
+      },
+      borderSkipped: "bottom" // biar bagian bawah nyambung
     };
   });
 
@@ -2390,7 +2409,28 @@ content.innerHTML = `
           offset: 2,
           color: "#333",
           font: { weight: "bold", size: 12 },
-          formatter: v => v.toLocaleString()
+          formatter: function (value, context) {
+            const datasets = context.chart.data.datasets;
+            const idx = context.dataIndex;
+
+            // hanya tampilkan angka di bar paling atas
+            let isTopBar = true;
+            for (let k = context.datasetIndex + 1; k < datasets.length; k++) {
+              if ((datasets[k].data[idx] ?? 0) > 0) {
+                isTopBar = false;
+                break;
+              }
+            }
+
+            if (!isTopBar) return null; // selain top bar, label tidak muncul
+
+            // hitung total stack per bar
+            let total = 0;
+            datasets.forEach(ds => {
+              total += ds.data?.[idx] ?? 0;
+            });
+            return total.toLocaleString();
+          }
         }
       },
       scales: {
@@ -2455,9 +2495,24 @@ content.innerHTML = `
       backgroundColor: color,
       borderRadius: ctx => {
         const datasets = ctx.chart.data.datasets;
-        return ctx.datasetIndex === datasets.length - 1 ? 10 : 0;
+        const dataIndex = ctx.dataIndex;
+        const datasetIndex = ctx.datasetIndex;
+
+        // cek apakah ini bar paling atas untuk dataIndex tertentu
+        let isTopBar = true;
+        for (let k = datasetIndex + 1; k < datasets.length; k++) {
+          if ((datasets[k].data[dataIndex] ?? 0) > 0) {
+            isTopBar = false;
+            break;
+          }
+        }
+
+        // kalau bar paling atas, kasih border radius di atas; bawah tetap 0
+        return isTopBar
+          ? { topLeft: 10, topRight: 10, bottomLeft: 0, bottomRight: 0 }
+          : 0; // selain top bar, tidak ada border radius
       },
-      borderSkipped: false
+      borderSkipped: "bottom" // bagian bawah tetap rata supaya stack nyambung
     };
   });
 
@@ -2498,7 +2553,18 @@ content.innerHTML = `
           formatter: function (value, context) {
             const datasets = context.chart.data.datasets;
             const idx = context.dataIndex;
-            if (context.datasetIndex !== datasets.length - 1) return null;
+
+            // hanya tampilkan label total di bar paling atas
+            let isTopBar = true;
+            for (let k = context.datasetIndex + 1; k < datasets.length; k++) {
+              if ((datasets[k].data[idx] ?? 0) > 0) {
+                isTopBar = false;
+                break;
+              }
+            }
+
+            if (!isTopBar) return null;
+
             let total = 0;
             datasets.forEach(ds => {
               total += ds.data?.[idx] ?? 0;
@@ -2510,17 +2576,12 @@ content.innerHTML = `
       scales: {
         x: {
           stacked: true,
-          grid: {
-            display: true,
-            color: "#e5e7eb"
-          }
+          grid: { display: true, color: "#e5e7eb" }
         },
         y: {
           stacked: true,
           beginAtZero: true,
-          grid: {
-            display: false
-          }
+          grid: { display: false }
         }
       }
     },
