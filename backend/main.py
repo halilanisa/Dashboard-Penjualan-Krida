@@ -822,6 +822,8 @@ def performa_sales(
     pivot["status_1_2"] = pivot["perubahan_1_2"].apply(status)
     pivot["status_2_3"] = pivot["perubahan_2_3"].apply(status)
 
+    pivot["rata_rata_3_bulan"] = pivot[["bulan_1", "bulan_2", "bulan_3"]].mean(axis=1)
+
     # FORMAT OUTPUT
     result = []
     for _, r in pivot.iterrows():
@@ -830,6 +832,7 @@ def performa_sales(
             "bulan_1": int(r["bulan_1"]),
             "bulan_2": int(r["bulan_2"]),
             "bulan_3": int(r["bulan_3"]),
+            "rata_rata_3_bulan": round(r["rata_rata_3_bulan"], 2),
             "perubahan_1_2": {
                 "nilai": int(r["perubahan_1_2"]),
                 **r["status_1_2"]
