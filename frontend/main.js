@@ -95,6 +95,8 @@ function buildQuery(params) {
   return q.toString();
 }
 
+const BASE_URL = "https://dashboard-penjualan-krida-production.up.railway.app";
+
 async function loadFilters() {
   const res = await fetch(`${BASE_URL}/filters`)
   const data = await res.json()
@@ -944,7 +946,6 @@ async function loadPerformaSales() {
               <th id="bulan1"></th>
               <th id="bulan2"></th>
               <th id="bulan3"></th>
-              <th>Rata-rata</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -988,9 +989,6 @@ async function loadPerformaSales() {
         <td style="text-align:center;">
           <div>${d.bulan_3}</div>
           ${p3}
-
-        <td style="text-align:center;">
-          <div>${d.rata_rata_3_bulan}</div>
         </td>
       </tr>
     `;
@@ -2350,9 +2348,8 @@ content.innerHTML = `
 
   const METODE_COLORS = ["#FFB703", "#E97700"];
 
-
   const datasetMetode = metodeList.map((metode, i) => {
-    const color = METODE_COLORS[i % METODE_COLORS.length];
+    const color = METODE_COLORS[i % METODE_COLORS.length]; // pakai warna solid
     return {
       label: metode,
       data: kecMetode.map(kec =>
@@ -2361,25 +2358,7 @@ content.innerHTML = `
           .reduce((sum, x) => sum + x.jumlah_transaksi, 0)
       ),
       backgroundColor: color,
-      borderRadius: ctx => {
-        const datasets = ctx.chart.data.datasets;
-        const dataIndex = ctx.dataIndex;
-        const datasetIndex = ctx.datasetIndex;
-
-        // cek apakah bar ini paling atas di stack
-        let isTopBar = true;
-        for (let k = datasetIndex + 1; k < datasets.length; k++) {
-          if ((datasets[k].data[dataIndex] ?? 0) > 0) {
-            isTopBar = false;
-            break;
-          }
-        }
-
-        return isTopBar
-          ? 10 // border radius di atas
-          : 0; // selain top bar, tidak ada border radius
-      },
-      borderSkipped: "bottom" // biar bagian bawah nyambung
+      borderRadius: 10
     };
   });
 
@@ -2411,28 +2390,7 @@ content.innerHTML = `
           offset: 2,
           color: "#333",
           font: { weight: "bold", size: 12 },
-          formatter: function (value, context) {
-            const datasets = context.chart.data.datasets;
-            const idx = context.dataIndex;
-
-            // hanya tampilkan angka di bar paling atas
-            let isTopBar = true;
-            for (let k = context.datasetIndex + 1; k < datasets.length; k++) {
-              if ((datasets[k].data[idx] ?? 0) > 0) {
-                isTopBar = false;
-                break;
-              }
-            }
-
-            if (!isTopBar) return null; // selain top bar, label tidak muncul
-
-            // hitung total stack per bar
-            let total = 0;
-            datasets.forEach(ds => {
-              total += ds.data?.[idx] ?? 0;
-            });
-            return total.toLocaleString();
-          }
+          formatter: v => v.toLocaleString()
         }
       },
       scales: {
@@ -2497,24 +2455,9 @@ content.innerHTML = `
       backgroundColor: color,
       borderRadius: ctx => {
         const datasets = ctx.chart.data.datasets;
-        const dataIndex = ctx.dataIndex;
-        const datasetIndex = ctx.datasetIndex;
-
-        // cek apakah ini bar paling atas untuk dataIndex tertentu
-        let isTopBar = true;
-        for (let k = datasetIndex + 1; k < datasets.length; k++) {
-          if ((datasets[k].data[dataIndex] ?? 0) > 0) {
-            isTopBar = false;
-            break;
-          }
-        }
-
-        // kalau bar paling atas, kasih border radius di atas; bawah tetap 0
-        return isTopBar
-          ? { topLeft: 10, topRight: 10, bottomLeft: 0, bottomRight: 0 }
-          : 0; // selain top bar, tidak ada border radius
+        return ctx.datasetIndex === datasets.length - 1 ? 10 : 0;
       },
-      borderSkipped: "bottom" // bagian bawah tetap rata supaya stack nyambung
+      borderSkipped: false
     };
   });
 
@@ -2555,18 +2498,7 @@ content.innerHTML = `
           formatter: function (value, context) {
             const datasets = context.chart.data.datasets;
             const idx = context.dataIndex;
-
-            // hanya tampilkan label total di bar paling atas
-            let isTopBar = true;
-            for (let k = context.datasetIndex + 1; k < datasets.length; k++) {
-              if ((datasets[k].data[idx] ?? 0) > 0) {
-                isTopBar = false;
-                break;
-              }
-            }
-
-            if (!isTopBar) return null;
-
+            if (context.datasetIndex !== datasets.length - 1) return null;
             let total = 0;
             datasets.forEach(ds => {
               total += ds.data?.[idx] ?? 0;
@@ -2578,12 +2510,17 @@ content.innerHTML = `
       scales: {
         x: {
           stacked: true,
-          grid: { display: true, color: "#e5e7eb" }
+          grid: {
+            display: true,
+            color: "#e5e7eb"
+          }
         },
         y: {
           stacked: true,
           beginAtZero: true,
-          grid: { display: false }
+          grid: {
+            display: false
+          }
         }
       }
     },
