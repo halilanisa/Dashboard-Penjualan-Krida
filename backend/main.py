@@ -812,8 +812,6 @@ def performa_sales(
     pivot["perubahan_1_2"] = pivot["bulan_2"] - pivot["bulan_1"]
     pivot["perubahan_2_3"] = pivot["bulan_3"] - pivot["bulan_2"]
 
-    pivot["rata_rata_3_bulan"] = pivot[["bulan_1", "bulan_2", "bulan_3"]].mean(axis=1)
-
     def status(delta):
         if delta > 0:
             return {"status": "naik", "warna": "green", "icon": "▲"}
@@ -832,7 +830,6 @@ def performa_sales(
             "bulan_1": int(r["bulan_1"]),
             "bulan_2": int(r["bulan_2"]),
             "bulan_3": int(r["bulan_3"]),
-            "rata_rata_3_bulan": round(r["rata_rata_3_bulan"], 2),
             "perubahan_1_2": {
                 "nilai": int(r["perubahan_1_2"]),
                 **r["status_1_2"]
