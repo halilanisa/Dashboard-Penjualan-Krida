@@ -946,6 +946,7 @@ async function loadPerformaSales() {
               <th id="bulan1"></th>
               <th id="bulan2"></th>
               <th id="bulan3"></th>
+              <th>Rata-Rata</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -989,6 +990,9 @@ async function loadPerformaSales() {
         <td style="text-align:center;">
           <div>${d.bulan_3}</div>
           ${p3}
+
+        <td style="text-align:center;">
+          <div>${d.rata_rata_3_bulan}</div>
         </td>
       </tr>
     `;
