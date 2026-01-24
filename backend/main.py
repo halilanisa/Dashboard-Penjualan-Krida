@@ -16,6 +16,7 @@ from io import BytesIO
 import holidays
 import os
 import json
+import math
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -833,7 +834,7 @@ def performa_sales(
             "bulan_1": int(r["bulan_1"]),
             "bulan_2": int(r["bulan_2"]),
             "bulan_3": int(r["bulan_3"]),
-            "rata_rata_3_bulan": round(r["rata_rata_3_bulan"], 2),
+            "rata_rata_3_bulan": math.floor(r["rata_rata_3_bulan"] + 0.5),
             "perubahan_1_2": {
                 "nilai": int(r["perubahan_1_2"]),
                 **r["status_1_2"]
