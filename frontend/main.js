@@ -241,6 +241,18 @@ async function loadOverview() {
                 <canvas id="trendChart"></canvas>
             </div>
 
+            <div class="card">
+                <h3>Penjualan per Wiraniaga</h3>
+                <div class="dropdown-top-wiraniaga">
+                    <select id="selectTopWiraniaga">
+                        <option value="5" selected>Top 5</option>
+                        <option value="10">Top 10</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+                <canvas id="chartPenjualanWiraniaga"></canvas>
+            </div>
+
             <div class="grid-2">
                 <div class="card"><h3>Distribusi Metode Penjualan</h3><canvas id="piePenjualan"></canvas></div>
                 <div class="card"><h3>Penjualan Per Status Sales</h3><canvas id="statusSales"></canvas></div>
