@@ -258,32 +258,13 @@ async function loadOverview() {
                 <div class="card"><h3>Penjualan Per Status Sales</h3><canvas id="statusSales"></canvas></div>
             </div>
 
-            <div class="card">
-                <h3>Lead Prospek Sistem</h3>
-                <div class="sales-date-filter">
-                    <input type="date" id="salesStartDate">
-                    <input type="date" id="salesEndDate">
-                </div>
-                <div class="dropdown-top-sales">
-                            <select id="selectTopSales">
-                        <option value="5" selected>Top 5</option>
-                        <option value="10">Top 10</option>
-                        <option value="all">All</option>
-                    </select>
-                </div>
-                <canvas id="chartTransaksiSales"></canvas>
-            </div>
-
             <div class="grid-2">
                 <div class="card"><h3>Top Kecamatan</h3><canvas id="topKecamatan"></canvas></div>
                 <div class="card"><h3>Top Kendaraan</h3><canvas id="topKendaraan"></canvas></div>
             </div>
         </div>
     `;
-    setTimeout(() => {
-      document.getElementById("salesStartDate")?.addEventListener("change", reloadTransaksiSales);
-      document.getElementById("salesEndDate")?.addEventListener("change", reloadTransaksiSales);
-    }, 0);
+
   const filters = getGlobalFilters();
   const query = buildQuery(filters);
   const res = await fetch(`${BASE_URL}/overview?${query}`);
@@ -338,89 +319,6 @@ async function loadOverview() {
     `;
 
   renderCharts(data);
-}
-
-
-let chartTransaksiSales = null;
-
-// TRANSAKSI SALES CHART
-function renderTransaksiSalesChart(data) {
-  const ctx = document.getElementById("chartTransaksiSales").getContext("2d");
-  const COLORS = ["#C73333", "#D1470B", "#E97700", "#FFB703", "#5dc3ab", "#218a71"];
-
-  const labelsSource = data.transaksi_sales.labels;
-  const datasetsSource = data.transaksi_sales.datasets.map((ds, i) => ({
-    ...ds,
-    backgroundColor: COLORS[i % COLORS.length], // pakai warna palet lengkap
-    borderRadius: 10,
-    data: ds.data
-  }));
-
-  function updateChart(topN) {
-    let labels, datasets;
-
-    if (topN === "all") {
-      labels = labelsSource;
-      datasets = datasetsSource.map(ds => ({ ...ds, data: ds.data }));
-    } else {
-      const n = parseInt(topN);
-      labels = labelsSource.slice(0, n);
-      datasets = datasetsSource.map(ds => ({ ...ds, data: ds.data.slice(0, n) }));
-    }
-
-    if (chartTransaksiSales) chartTransaksiSales.destroy();
-
-    chartTransaksiSales = new Chart(ctx, {
-      type: 'bar',
-      data: { labels, datasets },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            mode: 'index',
-            intersect: false,
-            callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x}` }
-          },
-          datalabels: {
-            color: '#333',
-            anchor: 'end',
-            align: 'end',
-            offset: 6,
-            font: { weight: 'bold', size: 12 },
-            formatter: (value, ctx) => {
-              const datasets = ctx.chart.data.datasets;
-              const lastDatasetIndex = datasets.length - 1;
-              if (ctx.datasetIndex !== lastDatasetIndex) return '';
-              let total = 0;
-              datasets.forEach(ds => { total += ds.data[ctx.dataIndex] || 0; });
-              return total.toLocaleString();
-            }
-          }
-        },
-        scales: {
-          x: { 
-            stacked: true, 
-            beginAtZero: true, 
-            grid: { display: false }, 
-            ticks: { font: { size: 11 } } 
-          },
-          y: { 
-            stacked: true, 
-            grid: { drawTicks: false, color: '#eee' }, 
-            ticks: { font: { size: 11 } } 
-          }
-        },
-        animation: { duration: 1500, easing: 'easeOutQuart' }
-      },
-      plugins: [ChartDataLabels]
-    });
-  }
-
-  updateChart(document.getElementById("selectTopSales")?.value || 5);
-  document.getElementById("selectTopSales").onchange = e => updateChart(e.target.value);
 }
 
 function renderCharts(data) {
@@ -909,24 +807,7 @@ document.querySelectorAll(".filter-input").forEach(el =>
       plugins: [ChartDataLabels]
   });
 
-  renderTransaksiSalesChart(data);
   }
-// RELOAD TRANSAKSI SALES
-async function reloadTransaksiSales() {
-  const filters = getGlobalFilters();
-
-  const salesStart = document.getElementById("salesStartDate")?.value;
-  const salesEnd = document.getElementById("salesEndDate")?.value;
-
-  if (salesStart) filters.sales_start_date = salesStart;
-  if (salesEnd) filters.sales_end_date = salesEnd;
-
-  const query = buildQuery(filters);
-  const res = await fetch(`${BASE_URL}/overview?${query}`);
-  const data = await res.json();
-
-  renderTransaksiSalesChart(data);
-}
 
 async function loadPerformaSales() {
   content.innerHTML = `
