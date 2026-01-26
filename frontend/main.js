@@ -43,7 +43,7 @@ function loadPage(page) {
   const pageNames = {
     home: "Beranda",
     overview: "Ringkasan",
-    "performa-sales": "Performa Sales",
+    "performa-sales": "Performa",
     trend: "Tren",
     penjualan: "Penjualan",
     produk: "Produk",
