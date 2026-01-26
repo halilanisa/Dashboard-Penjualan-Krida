@@ -834,6 +834,26 @@ async function loadPerformaSales() {
         </table>
       </div>
     </div>
+
+    <div class="card" style="margin-top:25px;">
+      <h3 style="margin-bottom:10px;">Performa Supervisor 3 Bulan Terakhir</h3>
+
+      <div style="overflow:auto;">
+        <table class="table" id="tablePerformaSupervisor">
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Supervisor</th>
+              <th id="sup-bulan1"></th>
+              <th id="sup-bulan2"></th>
+              <th id="sup-bulan3"></th>
+              <th>Rata-Rata</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   `;
 
   const filters = getGlobalFilters();
@@ -844,17 +864,19 @@ async function loadPerformaSales() {
 
   const [bulan1, bulan2, bulan3] = data.periode;
 
+  // ================= SALES =================
   document.getElementById("bulan1").innerText = bulan1;
   document.getElementById("bulan2").innerText = bulan2;
   document.getElementById("bulan3").innerText = bulan3;
 
-  const tbody = document.querySelector("#tablePerformaSales tbody");
+  const tbodySales = document.querySelector("#tablePerformaSales tbody");
+  tbodySales.innerHTML = "";
 
-  data.data.forEach((d, i) => {
+  data.sales.forEach((d, i) => {
     const p2 = buildPerubahan(d.bulan_1, d.bulan_2);
     const p3 = buildPerubahan(d.bulan_2, d.bulan_3);
 
-    tbody.innerHTML += `
+    tbodySales.innerHTML += `
       <tr>
         <td>${i + 1}</td>
         <td>${d.sales}</td>
@@ -871,6 +893,45 @@ async function loadPerformaSales() {
         <td style="text-align:center;">
           <div>${d.bulan_3}</div>
           ${p3}
+        </td>
+
+        <td style="text-align:center;">
+          <div>${d.rata_rata_3_bulan}</div>
+        </td>
+      </tr>
+    `;
+  });
+
+  // ================= SUPERVISOR =================
+  document.getElementById("sup-bulan1").innerText = bulan1;
+  document.getElementById("sup-bulan2").innerText = bulan2;
+  document.getElementById("sup-bulan3").innerText = bulan3;
+
+  const tbodySup = document.querySelector("#tablePerformaSupervisor tbody");
+  tbodySup.innerHTML = "";
+
+  data.supervisor.forEach((d, i) => {
+    const p2 = buildPerubahan(d.bulan_1, d.bulan_2);
+    const p3 = buildPerubahan(d.bulan_2, d.bulan_3);
+
+    tbodySup.innerHTML += `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${d.supervisor}</td>
+
+        <td style="text-align:center;">
+          <div>${d.bulan_1}</div>
+        </td>
+
+        <td style="text-align:center;">
+          <div>${d.bulan_2}</div>
+          ${p2}
+        </td>
+
+        <td style="text-align:center;">
+          <div>${d.bulan_3}</div>
+          ${p3}
+        </td>
 
         <td style="text-align:center;">
           <div>${d.rata_rata_3_bulan}</div>
@@ -879,6 +940,7 @@ async function loadPerformaSales() {
     `;
   });
 }
+
 function buildPerubahan(prev, curr) {
   const diff = curr - prev;
 

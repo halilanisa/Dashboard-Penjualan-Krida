@@ -743,7 +743,9 @@ def performa_sales(
     end_date: str | None = None
 ):
 
+    # =====================
     # LOAD DATA
+    # =====================
     df = pd.read_sql("""
         SELECT
             tgl_invoice,
@@ -768,7 +770,9 @@ def performa_sales(
         supervisor
     )
 
-    # TENTUKAN 3 BULAN BERDASARKAN END_DATE
+    # =====================
+    # TENTUKAN 3 BULAN
+    # =====================
     if end_date:
         end_month = pd.to_datetime(end_date).to_period("M").to_timestamp()
     else:
@@ -789,7 +793,9 @@ def performa_sales(
         last_3_months[2]: "bulan_3"
     }
 
-    # AGREGASI PER SALES
+    # ==================================================
+    # ===================== SALES ======================
+    # ==================================================
     sales_df = (
         df
         .groupby(["wiraniaga", "bulan"])["nomor_invoice"]
@@ -797,7 +803,7 @@ def performa_sales(
         .reset_index(name="jumlah_transaksi")
     )
 
-    pivot = (
+    sales_pivot = (
         sales_df
         .pivot(index="wiraniaga", columns="bulan", values="jumlah_transaksi")
         .fillna(0)
@@ -806,15 +812,14 @@ def performa_sales(
     )
 
     for col in ["bulan_1", "bulan_2", "bulan_3"]:
-        if col not in pivot:
-            pivot[col] = 0
+        if col not in sales_pivot:
+            sales_pivot[col] = 0
 
-    # HITUNG PERUBAHAN
-    pivot["perubahan_1_2"] = pivot["bulan_2"] - pivot["bulan_1"]
-    pivot["perubahan_2_3"] = pivot["bulan_3"] - pivot["bulan_2"]
-
-    # HITUNG RATA-RATA 3 BULAN
-    pivot["rata_rata_3_bulan"] = pivot[["bulan_1", "bulan_2", "bulan_3"]].mean(axis=1)
+    sales_pivot["perubahan_1_2"] = sales_pivot["bulan_2"] - sales_pivot["bulan_1"]
+    sales_pivot["perubahan_2_3"] = sales_pivot["bulan_3"] - sales_pivot["bulan_2"]
+    sales_pivot["rata_rata_3_bulan"] = sales_pivot[
+        ["bulan_1", "bulan_2", "bulan_3"]
+    ].mean(axis=1)
 
     def status(delta):
         if delta > 0:
@@ -823,35 +828,75 @@ def performa_sales(
             return {"status": "turun", "warna": "red", "icon": "▼"}
         return {"status": "stabil", "warna": "yellow", "icon": "▬"}
 
-    pivot["status_1_2"] = pivot["perubahan_1_2"].apply(status)
-    pivot["status_2_3"] = pivot["perubahan_2_3"].apply(status)
+    sales_pivot["status_1_2"] = sales_pivot["perubahan_1_2"].apply(status)
+    sales_pivot["status_2_3"] = sales_pivot["perubahan_2_3"].apply(status)
 
-    # FORMAT OUTPUT
-    result = []
-    for _, r in pivot.iterrows():
-        result.append({
+    sales_result = []
+    for _, r in sales_pivot.iterrows():
+        sales_result.append({
             "sales": r["wiraniaga"],
             "bulan_1": int(r["bulan_1"]),
             "bulan_2": int(r["bulan_2"]),
             "bulan_3": int(r["bulan_3"]),
-            "rata_rata_3_bulan": math.floor(r["rata_rata_3_bulan"] + 0.5),
-            "perubahan_1_2": {
-                "nilai": int(r["perubahan_1_2"]),
-                **r["status_1_2"]
-            },
-            "perubahan_2_3": {
-                "nilai": int(r["perubahan_2_3"]),
-                **r["status_2_3"]
-            }
+            "rata_rata_3_bulan": round(r["rata_rata_3_bulan"]),
+            "perubahan_1_2": { "nilai": int(r["perubahan_1_2"]), **r["status_1_2"] },
+            "perubahan_2_3": { "nilai": int(r["perubahan_2_3"]), **r["status_2_3"] }
         })
 
+    # ==================================================
+    # =================== SUPERVISOR ===================
+    # ==================================================
+    sup_df = (
+        df
+        .groupby(["supervisor", "bulan"])["nomor_invoice"]
+        .nunique()
+        .reset_index(name="jumlah_transaksi")
+    )
+
+    sup_pivot = (
+        sup_df
+        .pivot(index="supervisor", columns="bulan", values="jumlah_transaksi")
+        .fillna(0)
+        .reset_index()
+        .rename(columns=bulan_labels)
+    )
+
+    for col in ["bulan_1", "bulan_2", "bulan_3"]:
+        if col not in sup_pivot:
+            sup_pivot[col] = 0
+
+    sup_pivot["perubahan_1_2"] = sup_pivot["bulan_2"] - sup_pivot["bulan_1"]
+    sup_pivot["perubahan_2_3"] = sup_pivot["bulan_3"] - sup_pivot["bulan_2"]
+    sup_pivot["rata_rata_3_bulan"] = sup_pivot[
+        ["bulan_1", "bulan_2", "bulan_3"]
+    ].mean(axis=1)
+
+    sup_pivot["status_1_2"] = sup_pivot["perubahan_1_2"].apply(status)
+    sup_pivot["status_2_3"] = sup_pivot["perubahan_2_3"].apply(status)
+
+    supervisor_result = []
+    for _, r in sup_pivot.iterrows():
+        supervisor_result.append({
+            "supervisor": r["supervisor"],
+            "bulan_1": int(r["bulan_1"]),
+            "bulan_2": int(r["bulan_2"]),
+            "bulan_3": int(r["bulan_3"]),
+            "rata_rata_3_bulan": round(r["rata_rata_3_bulan"]),
+            "perubahan_1_2": { "nilai": int(r["perubahan_1_2"]), **r["status_1_2"] },
+            "perubahan_2_3": { "nilai": int(r["perubahan_2_3"]), **r["status_2_3"] }
+        })
+
+    # =====================
+    # RESPONSE
+    # =====================
     return {
         "periode": [
             last_3_months[0].strftime("%B %Y"),
             last_3_months[1].strftime("%B %Y"),
             last_3_months[2].strftime("%B %Y")
         ],
-        "data": sorted(result, key=lambda x: x["bulan_3"], reverse=True)
+        "sales": sorted(sales_result, key=lambda x: x["bulan_3"], reverse=True),
+        "supervisor": sorted(supervisor_result, key=lambda x: x["bulan_3"], reverse=True)
     }
 
 @app.get("/trend")
